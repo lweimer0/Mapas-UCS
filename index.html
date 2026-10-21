@@ -1,0 +1,92 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trilhas UCS - Navegação e Patrimônio</title>
+
+    <!-- Estilos da Aplicação -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Leaflet CSS (Mapa) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+</head>
+<body>
+
+    <header>
+        <h1>Trilhas UCS</h1>
+        <div class="controls">
+            <button id="btn-contrast" aria-label="Alternar Alto Contraste">Alto Contraste</button>
+        </div>
+    </header>
+
+    <nav>
+        <button class="active" onclick="showTab('tab-mapa')">Mapa & Rotas</button>
+        <button onclick="showTab('tab-scanner')">Scanner de Arte</button>
+        <button onclick="showTab('tab-album')">Álbum Digital</button>
+    </nav>
+
+    <main>
+        <!-- Aba 1: Mapa e Navegação por Voz -->
+        <section id="tab-mapa" class="tab-content active">
+            <div id="map"></div>
+
+            <div class="route-panel">
+                <h2>Calcular Trajeto a Pé</h2>
+                <label for="select-origem">Ponto de Partida:</label>
+                <select id="select-origem">
+                    <option value="reitoria">Reitoria (Bloco A)</option>
+                    <option value="bloco_m">Bloco M - Politécnico</option>
+                    <option value="biblioteca">Biblioteca Central</option>
+                    <option value="bloco_43">Bloco 43 - Exatas</option>
+                    <option value="vila_olimpica">Vila Olímpica</option>
+                </select>
+
+                <label for="select-destino">Destino:</label>
+                <select id="select-destino">
+                    <option value="biblioteca">Biblioteca Central</option>
+                    <option value="reitoria">Reitoria (Bloco A)</option>
+                    <option value="bloco_m">Bloco M - Politécnico</option>
+                    <option value="bloco_43">Bloco 43 - Exatas</option>
+                    <option value="vila_olimpica">Vila Olímpica</option>
+                </select>
+
+                <button onclick="calcularRota()">Trçar Rota e Iniciar Guia por Voz</button>
+                <div id="instrucoes-rota" style="margin-top: 1rem; font-weight: bold;"></div>
+            </div>
+        </section>
+
+        <!-- Aba 2: Scanner de Obras de Arte -->
+        <section id="tab-scanner" class="tab-content">
+            <div class="card">
+                <h2>Scanner de Obras de Arte</h2>
+                <p>Aponte a câmera do seu dispositivo para uma escultura ou mural no campus.</p>
+
+                <div class="webcam-container">
+                    <video id="webcam" autoplay playsinline muted></video>
+                </div>
+
+                <button onclick="capturarEIdentificarObra()" style="width: 100%; margin-top: 1rem;">Escanear Obra</button>
+                <div id="scanner-result" style="margin-top: 1rem;"></div>
+            </div>
+        </section>
+
+        <!-- Aba 3: Álbum Digital de Figurinhas -->
+        <section id="tab-album" class="tab-content">
+            <div class="card">
+                <h2>Álbum do Patrimônio Artístico</h2>
+                <p>Desbloqueie figurinhas explorando e escaneando as obras do campus da UCS.</p>
+                <div id="album-container" class="album-grid"></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Scripts JS do Leaflet e Roteamento -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+
+    <!-- Lógica Principal da Aplicação -->
+    <script src="script.js"></script>
+</body>
+</html>
