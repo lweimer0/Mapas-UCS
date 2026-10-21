@@ -1,167 +1,229 @@
-﻿:root {
-	--primary: #003366;
-	--secondary: #d90429;
-	--bg-light: #f8f9fa;
-	--text-dark: #212529;
-	--card-bg: #ffffff;
+﻿/* ===================== TOKENS ===================== */
+:root {
+	--ink: #1d2b2e;
+	--trail-blue: #2a6f97;
+	--signal-red: #e63946;
+	--parchment: #f6f1e7;
+	--moss: #4c7a5a;
+	--graphite: #5c5f61;
+	--gold: #e9c46a;
+	--radius: 16px;
 }
 
-body.high-contrast {
-	--primary: #ffff00;
-	--secondary: #ff00ff;
-	--bg-light: #000000;
-	--text-dark: #ffffff;
-	--card-bg: #121212;
-}
-
-body {
-	font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-	background-color: var(--bg-light);
-	color: var(--text-dark);
-	margin: 0;
-	padding: 0;
-	display: flex;
-	flex-direction: column;
-	min-height: 100vh;
-}
-
-header {
-	background-color: var(--primary);
-	color: white;
-	padding: 1rem;
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-}
-
-	header h1 {
-		margin: 0;
-		font-size: 1.4rem;
-	}
-
-.controls {
-	display: flex;
-	gap: 0.5rem;
-}
-
-button {
-	background-color: var(--secondary);
-	color: white;
-	border: none;
-	padding: 0.6rem 1rem;
-	border-radius: 4px;
-	cursor: pointer;
-	font-weight: bold;
-}
-
-	button:focus, a:focus {
-		outline: 3px solid #ffcc00;
-	}
-
-nav {
-	display: flex;
-	justify-content: space-around;
-	background-color: #eee;
-	padding: 0.5rem;
-	border-bottom: 1px solid #ccc;
-}
-
-	nav button {
-		background: transparent;
-		color: var(--text-dark);
-		border: 1px solid transparent;
-		padding: 0.5rem 1rem;
-	}
-
-		nav button.active {
-			border-bottom: 3px solid var(--primary);
-			font-weight: bold;
-		}
-
-main {
-	flex: 1;
-	padding: 1rem;
-	max-width: 800px;
-	margin: 0 auto;
-	width: 100%;
+* {
 	box-sizing: border-box;
 }
 
-.tab-content {
-	display: none;
+body {
+	margin: 0;
+	font-family: 'Space Grotesk', system-ui, sans-serif;
+	background: var(--parchment);
+	color: var(--ink);
 }
 
-	.tab-content.active {
-		display: block;
+.app {
+	max-width: 480px;
+	margin: 0 auto;
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+	position: relative;
+	padding-bottom: 70px; /* espaço pra tab bar fixa */
+}
+
+/* ===================== HEADER ===================== */
+.app-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 16px;
+	background: var(--trail-blue);
+	color: #fff;
+}
+
+	.app-header h1 {
+		margin: 0;
+		font-size: 1.2rem;
 	}
 
-#map {
-	height: 350px;
-	width: 100%;
-	border-radius: 8px;
-	margin-bottom: 1rem;
+.user-status {
+	font-size: .75rem;
+	opacity: .85;
 }
 
-.route-panel, .card {
-	background: var(--card-bg);
-	padding: 1rem;
-	border-radius: 8px;
-	box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-	margin-bottom: 1rem;
+/* ===================== TELAS ===================== */
+.screen {
+	display: none;
+	padding: 16px;
+	flex: 1;
 }
 
-select {
-	width: 100%;
-	padding: 0.5rem;
-	margin: 0.5rem 0 1rem 0;
-	border-radius: 4px;
-	border: 1px solid #ccc;
+	.screen.active {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+
+/* --- Mapa --- */
+.search-bar {
+	display: flex;
+	gap: 8px;
 }
 
-.webcam-container {
-	position: relative;
-	width: 100%;
-	max-width: 400px;
-	margin: 0 auto;
-	background: #000;
-	border-radius: 8px;
+	.search-bar input {
+		flex: 1;
+		padding: 10px 12px;
+		border-radius: 999px;
+		border: 1px solid #ccc;
+	}
+
+	.search-bar button {
+		padding: 10px 14px;
+		border: none;
+		border-radius: 999px;
+		background: var(--signal-red);
+		color: #fff;
+		font-weight: 600;
+	}
+
+.mapa-container {
+	flex: 1;
+	min-height: 320px;
+	border-radius: var(--radius);
 	overflow: hidden;
+	border: 2px dashed var(--moss);
 }
 
-video {
-	width: 100%;
-	display: block;
+.bottom-sheet {
+	background: #fff;
+	border-radius: var(--radius);
+	padding: 14px;
+	box-shadow: 0 -2px 10px rgba(0,0,0,.08);
 }
 
+	.bottom-sheet button {
+		width: 100%;
+		padding: 12px;
+		border: none;
+		border-radius: 999px;
+		background: var(--moss);
+		color: #fff;
+		font-weight: 700;
+		margin-top: 8px;
+	}
+
+/* --- Rota --- */
+.nav-instrucao {
+	background: var(--ink);
+	color: #fff;
+	border-radius: var(--radius);
+	padding: 32px 16px;
+	text-align: center;
+}
+
+.nav-seta {
+	font-size: 3rem;
+}
+
+#nav-distancia {
+	font-size: 1.4rem;
+	font-weight: 700;
+	margin: 4px 0;
+}
+
+.voice-toggle {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: .9rem;
+}
+
+#btn-cancelar-trajeto {
+	background: var(--signal-red);
+	color: #fff;
+	border: none;
+	border-radius: 999px;
+	padding: 12px;
+	font-weight: 700;
+}
+
+/* --- Álbum --- */
 .album-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-	gap: 1rem;
+	grid-template-columns: repeat(5,1fr);
+	gap: 10px;
 }
 
 .sticker {
-	border: 2px dashed #ccc;
-	border-radius: 8px;
-	padding: 0.5rem;
+	aspect-ratio: 1;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: .75rem;
 	text-align: center;
-	background: var(--card-bg);
-	opacity: 0.5;
+	border: 2px solid var(--gold);
 }
+
+	.sticker.locked {
+		background: #ddd;
+		color: #999;
+		border-color: #ccc;
+	}
 
 	.sticker.unlocked {
-		border-style: solid;
-		border-color: var(--primary);
-		opacity: 1;
+		background: var(--gold);
+		color: var(--ink);
+		font-weight: 700;
 	}
 
-	.sticker img {
-		width: 100%;
-		height: 100px;
-		object-fit: cover;
-		border-radius: 4px;
-	}
-
-.hidden {
-	display: none !important;
+/* --- Scanner --- */
+.scanner-viewfinder {
+	position: relative;
+	border-radius: var(--radius);
+	overflow: hidden;
+	aspect-ratio: 3/4;
+	background: #000;
 }
+
+	.scanner-viewfinder video {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+#btn-escanear {
+	padding: 14px;
+	border: none;
+	border-radius: 999px;
+	background: var(--signal-red);
+	color: #fff;
+	font-weight: 700;
+}
+
+/* ===================== TAB BAR ===================== */
+.tab-bar {
+	position: fixed;
+	bottom: 0;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 100%;
+	max-width: 480px;
+	display: flex;
+	background: #fff;
+	border-top: 1px solid #ddd;
+}
+
+.tab-btn {
+	flex: 1;
+	padding: 14px 0;
+	border: none;
+	background: none;
+	font-weight: 600;
+	color: var(--graphite);
+}
+
+	.tab-btn.active {
+		color: var(--trail-blue);
+		border-top: 3px solid var(--trail-blue);
+	}

@@ -3,90 +3,91 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trilhas UCS - Navegação e Patrimônio</title>
+    <title>Trilhas UCS</title>
 
-    <!-- Estilos da Aplicação -->
+    <!-- Mapbox GL JS (mapa + cálculo de rota) -->
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.js"></script>
+
+    <!-- TensorFlow.js + modelo do Teachable Machine (reconhecimento de imagem) -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.5/dist/teachablemachine-image.min.js"></script>
+
+    <!-- Firebase (banco de dados do álbum de figurinhas) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+
     <link rel="stylesheet" href="style.css">
-
-    <!-- Leaflet CSS (Mapa) -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
 </head>
 <body>
 
-    <header>
-        <h1>Trilhas UCS</h1>
-        <div class="controls">
-            <button id="btn-contrast" aria-label="Alternar Alto Contraste">Alto Contraste</button>
-        </div>
-    </header>
+    <div class="app">
 
-    <nav>
-        <button class="active" onclick="showTab('tab-mapa')">Mapa & Rotas</button>
-        <button onclick="showTab('tab-scanner')">Scanner de Arte</button>
-        <button onclick="showTab('tab-album')">Álbum Digital</button>
-    </nav>
+        <!-- ===================== HEADER ===================== -->
+        <header class="app-header">
+            <h1>Trilhas UCS</h1>
+            <span id="user-status" class="user-status">conectando…</span>
+        </header>
 
-    <main>
-        <!-- Aba 1: Mapa e Navegação por Voz -->
-        <section id="tab-mapa" class="tab-content active">
-            <div id="map"></div>
+        <!-- ===================== TELA: MAPA ===================== -->
+        <section id="screen-mapa" class="screen active">
+            <div class="search-bar">
+                <input id="destino-input" type="text" placeholder="Para onde você vai?">
+                <button id="btn-buscar-rota">Buscar rota</button>
+            </div>
 
-            <div class="route-panel">
-                <h2>Calcular Trajeto a Pé</h2>
-                <label for="select-origem">Ponto de Partida:</label>
-                <select id="select-origem">
-                    <option value="reitoria">Reitoria (Bloco A)</option>
-                    <option value="bloco_m">Bloco M - Politécnico</option>
-                    <option value="biblioteca">Biblioteca Central</option>
-                    <option value="bloco_43">Bloco 43 - Exatas</option>
-                    <option value="vila_olimpica">Vila Olímpica</option>
-                </select>
+            <div id="mapa" class="mapa-container"></div>
 
-                <label for="select-destino">Destino:</label>
-                <select id="select-destino">
-                    <option value="biblioteca">Biblioteca Central</option>
-                    <option value="reitoria">Reitoria (Bloco A)</option>
-                    <option value="bloco_m">Bloco M - Politécnico</option>
-                    <option value="bloco_43">Bloco 43 - Exatas</option>
-                    <option value="vila_olimpica">Vila Olímpica</option>
-                </select>
-
-                <button onclick="calcularRota()">Trçar Rota e Iniciar Guia por Voz</button>
-                <div id="instrucoes-rota" style="margin-top: 1rem; font-weight: bold;"></div>
+            <div class="bottom-sheet" id="rota-info" hidden>
+                <p><strong id="rota-distancia">--</strong> · <span id="rota-tempo">--</span></p>
+                <button id="btn-iniciar-trajeto">Iniciar trajeto</button>
             </div>
         </section>
 
-        <!-- Aba 2: Scanner de Obras de Arte -->
-        <section id="tab-scanner" class="tab-content">
-            <div class="card">
-                <h2>Scanner de Obras de Arte</h2>
-                <p>Aponte a câmera do seu dispositivo para uma escultura ou mural no campus.</p>
-
-                <div class="webcam-container">
-                    <video id="webcam" autoplay playsinline muted></video>
-                </div>
-
-                <button onclick="capturarEIdentificarObra()" style="width: 100%; margin-top: 1rem;">Escanear Obra</button>
-                <div id="scanner-result" style="margin-top: 1rem;"></div>
+        <!-- ===================== TELA: ROTA (navegação ativa) ===================== -->
+        <section id="screen-rota" class="screen">
+            <div class="nav-instrucao">
+                <div id="nav-seta" class="nav-seta">↑</div>
+                <p id="nav-distancia">-- m</p>
+                <p id="nav-texto">Siga em frente</p>
             </div>
+
+            <label class="voice-toggle">
+                <input type="checkbox" id="toggle-guia-voz">
+                Guia por voz ativo
+            </label>
+
+            <button id="btn-cancelar-trajeto">Cancelar trajeto</button>
         </section>
 
-        <!-- Aba 3: Álbum Digital de Figurinhas -->
-        <section id="tab-album" class="tab-content">
-            <div class="card">
-                <h2>Álbum do Patrimônio Artístico</h2>
-                <p>Desbloqueie figurinhas explorando e escaneando as obras do campus da UCS.</p>
-                <div id="album-container" class="album-grid"></div>
-            </div>
+        <!-- ===================== TELA: ÁLBUM ===================== -->
+        <section id="screen-album" class="screen">
+            <h2>Álbum de figurinhas</h2>
+            <p id="album-progresso">0/30 desbloqueadas</p>
+            <div id="album-grid" class="album-grid"></div>
         </section>
-    </main>
 
-    <!-- Scripts JS do Leaflet e Roteamento -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+        <!-- ===================== TELA: SCANNER ===================== -->
+        <section id="screen-scanner" class="screen">
+            <div class="scanner-viewfinder">
+                <video id="scanner-video" autoplay playsinline muted></video>
+                <canvas id="scanner-canvas" hidden></canvas>
+            </div>
+            <button id="btn-escanear">Escanear obra de arte</button>
+            <p id="scanner-resultado"></p>
+        </section>
 
-    <!-- Lógica Principal da Aplicação -->
-    <script src="script.js"></script>
+        <!-- ===================== NAV INFERIOR ===================== -->
+        <nav class="tab-bar">
+            <button class="tab-btn active" data-screen="mapa">Mapa</button>
+            <button class="tab-btn" data-screen="rota">Rota</button>
+            <button class="tab-btn" data-screen="album">Álbum</button>
+            <button class="tab-btn" data-screen="scanner">Scanner</button>
+        </nav>
+
+    </div>
+
+    <script src="app.js"></script>
 </body>
 </html>
