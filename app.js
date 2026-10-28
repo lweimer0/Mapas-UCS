@@ -30,20 +30,12 @@ const RAIO_CHEGADA = 10;         // metros para considerar que chegou num ponto
 const RAIO_ALERTA = 22;
 const LIMITE_ANCORAGEM_GPS = 35;
 const INTERVALO_ORIENTACAO = 10000;
-const STORAGE_GRAFO = "trilhas_grafo_v2";
 const TIPOS_CAMINHO = {
-  externo: { nome: "Caminho externo", cor: "#ec168c" },
-  interno: { nome: "Caminho interno", cor: "#20c8d8" },
-  escadaria: { nome: "Escadaria", cor: "#f0d51b", alerta: "Atenção: escadaria à frente." },
-  rampa: { nome: "Rampa", cor: "#174ed1", alerta: "Atenção: rampa à frente." },
-  rua: { nome: "Rua ou travessia", cor: "#ef4438", alerta: "Atenção: travessia de rua à frente. Pare, verifique o trânsito e atravesse com cuidado." },
-  alternativo: { nome: "Caminho alternativo", cor: "#a34bb8" },
-  ligacao: { nome: "Ligação", cor: "#38ce43" },
-  travessia: { nome: "Travessia", cor: "#ef4438", alerta: "Atenção: travessia de rua à frente. Pare, verifique o trânsito e atravesse com cuidado." },
-  atencao: { nome: "Local de atenção", cor: "#ed8b26", alerta: "Atenção: local que exige cuidado à frente." },
-  acesso: { nome: "Acesso / ligação", cor: "#38ce43" },
-  passarela: { nome: "Passarela", cor: "#38ce43" },
-  caminho: { nome: "Caminho sem classificação", cor: "#858585" }
+  escadaria: { alerta: "Atenção: escadaria à frente." },
+  rampa: { alerta: "Atenção: rampa à frente." },
+  rua: { alerta: "Atenção: travessia de rua à frente. Pare, verifique o trânsito e atravesse com cuidado." },
+  travessia: { alerta: "Atenção: travessia de rua à frente. Pare, verifique o trânsito e atravesse com cuidado." },
+  atencao: { alerta: "Atenção: local que exige cuidado à frente." }
 };
 
 /* ---------- 2) ESTADO ---------- */
@@ -56,10 +48,8 @@ let mpp = 0.5;                   // metros por pixel (calculado)
 let view = { s: 1, tx: 0, ty: 0 };
 const pointers = new Map();
 
-// grafo de caminhos desenhado pelo grupo
+// Rede oficial de caminhos usada no roteamento
 let grafo = { nos: [], arestas: [], seq: 1 };   // nos: {id,x,y,loc?}  arestas: [idA,idB]
-let editorLigado = false;
-let noSelecionado = null;
 
 // seleção / rota / navegação
 let localSelecionado = null;
@@ -71,6 +61,8 @@ let simTimer = null;
 let falaAtiva = false;
 let falaOrientacaoPendente = "";
 let filaAlertas = [];
+let vozesDisponiveis = [];
+let idVozSelecionada = "auto";
 
 let db = null, tmModel = null;
 
@@ -93,6 +85,45 @@ function direcao(a, b) {
   return { ang };
 }
 
+function escolherVoz(voices, preferredId = "auto") {
+  const vozPreferida = preferredId !== "auto"
+    ? voices.find(voice => voice.voiceURI === preferredId)
+    : null;
+  if (vozPreferida) return vozPreferida;
+  return voices.find(voice => /^pt-BR$/i.test(voice.lang))
+    || voices.find(voice => /^pt(?:-|$)/i.test(voice.lang))
+    || voices.find(voice => voice.default)
+    || null;
+}
+
+function atualizarListaVozes() {
+  if (!("speechSynthesis" in window) || typeof window.speechSynthesis.getVoices !== "function") return;
+  vozesDisponiveis = window.speechSynthesis.getVoices().filter(voice => /^pt(?:-|$)/i.test(voice.lang));
+  const select = $("voice-select");
+  if (!select) return;
+  const atual = select.value || idVozSelecionada;
+  select.innerHTML = "";
+  const automatica = document.createElement("option");
+  automatica.value = "auto";
+  automatica.textContent = "Automática (português, se disponível)";
+  select.appendChild(automatica);
+  vozesDisponiveis.forEach(voice => {
+    const option = document.createElement("option");
+    option.value = voice.voiceURI;
+    option.textContent = `${voice.name} (${voice.lang})`;
+    select.appendChild(option);
+  });
+  select.value = vozesDisponiveis.some(voice => voice.voiceURI === atual) ? atual : "auto";
+  idVozSelecionada = select.value;
+}
+
+function configurarEnunciado(utterance) {
+  utterance.lang = "pt-BR";
+  utterance.voice = escolherVoz(vozesDisponiveis, idVozSelecionada);
+  const taxa = Number($("voice-rate").value);
+  utterance.rate = Number.isFinite(taxa) ? Math.min(1.25, Math.max(0.75, taxa)) : 0.95;
+}
+
 function processarFilaDeFala() {
   if (falaAtiva || !$("toggle-guia-voz").checked || !("speechSynthesis" in window)) return;
   const alerta = filaAlertas.shift();
@@ -101,7 +132,7 @@ function processarFilaDeFala() {
   if (!alerta) falaOrientacaoPendente = "";
   falaAtiva = true;
   const u = new SpeechSynthesisUtterance(texto);
-  u.lang = "pt-BR";
+  configurarEnunciado(u);
   u.onend = u.onerror = () => {
     falaAtiva = false;
     processarFilaDeFala();
@@ -365,15 +396,9 @@ function mostrarSheetLocal(l) {
   ]);
 }
 
-/* ---------- 7) GRAFO DE CAMINHOS (editor) ---------- */
-
-function salvarGrafo() { try { localStorage.setItem(STORAGE_GRAFO, JSON.stringify(grafo)); } catch (e) {} }
+/* ---------- 7) REDE OFICIAL DE CAMINHOS ---------- */
 
 async function carregarGrafo() {
-  try {
-    const salvo = localStorage.getItem(STORAGE_GRAFO) || localStorage.getItem("trilhas_grafo_v1");
-    if (salvo) { grafo = JSON.parse(salvo); return; }
-  } catch (e) {}
   try {                                   // caminhos.json publicado junto com o site
     const r = await fetch("caminhos.json", { cache: "no-store" });
     if (r.ok) grafo = await r.json();
@@ -388,20 +413,6 @@ function desenharGrafo() {
   svg.setAttribute("viewBox", `0 0 ${b.largura} ${b.altura}`);
   svg.setAttribute("width", b.largura); svg.setAttribute("height", b.altura);
   let h = "";
-  grafo.arestas.forEach(aresta => {
-      const { a, b: c } = pontasAresta(aresta);
-      const A = noPorId(a), C = noPorId(c); if (!A || !C) return;
-      const tipo = tipoAresta(aresta);
-      const estilo = TIPOS_CAMINHO[tipo] || TIPOS_CAMINHO.caminho;
-      const tracejado = tipo === "atencao" || tipo === "passarela";
-      h += `<line x1="${A.x}" y1="${A.y}" x2="${C.x}" y2="${C.y}" stroke="${estilo.cor}" stroke-width="${editorLigado ? 3.2 : 2.4}" vector-effect="non-scaling-stroke" stroke-opacity="${editorLigado ? 1 : .86}" stroke-dasharray="${tracejado ? "5 4" : "none"}" stroke-linecap="round"/>`;
-    });
-  if (editorLigado) {
-    grafo.nos.forEach(n => {
-      const sel = n.id === noSelecionado;
-      h += `<circle cx="${n.x}" cy="${n.y}" r="${sel ? 8 : 5}" fill="${sel ? "#e9c46a" : "#fff"}" stroke="#e63946" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
-    });
-  }
   if (rotaAtual) {
     const pts = rotaAtual.pts.map(p => `${p.x},${p.y}`).join(" ");
     h += `<polyline points="${pts}" fill="none" stroke="#fff" stroke-width="9" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>`;
@@ -409,91 +420,12 @@ function desenharGrafo() {
   }
   svg.innerHTML = h;
 }
-function atualizaContador() {
-  $("editor-contador").textContent = `(${grafo.nos.length} pontos, ${grafo.arestas.length} trechos)`;
-}
-
-function noPerto(p, raioPx) {
-  let m = null, d0 = raioPx;
-  grafo.nos.forEach(n => { const d = Math.hypot(n.x - p.x, n.y - p.y); if (d < d0) { d0 = d; m = n; } });
-  return m;
-}
-
-function ligar(a, b) {
-  if (!a || !b || a === b) return;
-  const existente = grafo.arestas.find(aresta => {
-    const pontas = pontasAresta(aresta);
-    return (pontas.a === a && pontas.b === b) || (pontas.a === b && pontas.b === a);
-  });
-  const tipo = $("editor-tipo").value || "externo";
-  if (existente) {
-    if (Array.isArray(existente)) existente[2] = tipo;
-    else existente.tipo = tipo;
-  } else grafo.arestas.push([a, b, tipo]);
-}
 
 function aoTocarMapa(cx, cy) {
   const p = telaParaMundo(cx, cy);
   const alcance = 16 / view.s;
-
-  if (editorLigado) {
-    let no = noPerto(p, alcance);
-    if (!no) {
-      const l = localMaisProximo(p, alcance);
-      if (l) {                                         // usa o bloco como ponto do grafo
-        no = grafo.nos.find(n => n.loc === l.id);
-        if (!no) { no = { id: "L" + l.id, x: l.x, y: l.y, loc: l.id }; grafo.nos.push(no); }
-      } else {
-        no = { id: "W" + (grafo.seq++), x: Math.round(p.x), y: Math.round(p.y) };
-        grafo.nos.push(no);
-      }
-    }
-    if (noSelecionado && noSelecionado !== no.id) ligar(noSelecionado, no.id);
-    noSelecionado = no.id;
-    salvarGrafo(); atualizaContador(); desenharGrafo();
-    return;
-  }
-
   const l = localMaisProximo(p, alcance * 1.3);
   if (l) selecionarLocal(l);
-}
-
-function iniciarEditor() {
-  $("btn-editor").addEventListener("click", () => {
-    editorLigado = !editorLigado;
-    $("btn-editor").classList.toggle("ativo", editorLigado);
-    $("editor-panel").hidden = !editorLigado;
-    noSelecionado = null; atualizaContador(); desenharGrafo();
-  });
-  $("ed-terminar").addEventListener("click", () => { noSelecionado = null; desenharGrafo(); });
-  $("ed-apagar").addEventListener("click", () => {
-    if (!noSelecionado) return alert("Toque num ponto para selecioná-lo antes de apagar.");
-    grafo.nos = grafo.nos.filter(n => n.id !== noSelecionado);
-    grafo.arestas = grafo.arestas.filter(aresta => {
-      const pontas = pontasAresta(aresta);
-      return pontas.a !== noSelecionado && pontas.b !== noSelecionado;
-    });
-    noSelecionado = null; salvarGrafo(); atualizaContador(); desenharGrafo();
-  });
-  $("ed-limpar").addEventListener("click", () => {
-    if (!confirm("Apagar TODOS os caminhos desenhados neste aparelho?")) return;
-    grafo = { nos: [], arestas: [], seq: 1 }; noSelecionado = null;
-    salvarGrafo(); atualizaContador(); desenharGrafo();
-  });
-  $("ed-exportar").addEventListener("click", () => {
-    const txt = JSON.stringify(grafo);
-    if (navigator.clipboard) navigator.clipboard.writeText(txt).catch(() => {});
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([txt], { type: "application/json" }));
-    a.download = "caminhos.json"; a.click();
-    alert("Arquivo caminhos.json baixado (e copiado). Suba ele para o repositório, na mesma pasta do index.html, para todos verem os caminhos.");
-  });
-  $("ed-importar").addEventListener("click", () => $("ed-arquivo").click());
-  $("ed-arquivo").addEventListener("change", async (e) => {
-    const f = e.target.files[0]; if (!f) return;
-    try { grafo = JSON.parse(await f.text()); salvarGrafo(); atualizaContador(); desenharGrafo(); }
-    catch (err) { alert("Arquivo inválido."); }
-  });
 }
 
 /* ---------- 8) ROTA (Dijkstra) ---------- */
@@ -546,29 +478,32 @@ function dijkstra(origemId, destinoId) {
 
 function comprimento(pts) { let s = 0; for (let i = 1; i < pts.length; i++) s += dist(pts[i - 1], pts[i]); return s; }
 
+function planejarRota(origemTexto, destinoTexto) {
+  if (!origemTexto.trim() || !destinoTexto.trim()) return null;
+  const origem = acharLocalPorNome(origemTexto);
+  const destino = acharLocalPorNome(destinoTexto);
+  if (!origem || !destino) return null;
+  const caminho = rotaNoGrafo(origem, destino);
+  return caminho ? { origem, destino, pts: caminho.map(no => ({ ...no })) } : null;
+}
+
+function limparCamposRota() {
+  $("origem-input").value = "";
+  $("destino-input").value = "";
+}
+
 function tracarRota() {
-  const dest = acharLocalPorNome($("destino-input").value);
-  if (!dest) return alert("Escolha um destino da lista (comece a digitar o nome do bloco).");
-
-  let origem, origemNome;
   const txtOrigem = $("origem-input").value.trim();
-  if (txtOrigem) {
-    origem = acharLocalPorNome(txtOrigem);
-    if (!origem) return alert("Origem não encontrada. Deixe vazio para usar sua localização.");
-    origemNome = origem.nome;
-  } else if (posUsuario) { origem = { ponto: posUsuario }; origemNome = "sua localização"; }
-  else return alert("Sem localização do GPS ainda. Escolha uma origem na lista (campo \"De:\").");
+  const txtDestino = $("destino-input").value.trim();
+  if (!txtOrigem) return alert("Informe de onde você vai sair para criar cada nova rota.");
+  if (!acharLocalPorNome(txtOrigem)) return alert("Origem não encontrada. Escolha um local da lista.");
+  if (!txtDestino) return alert("Informe o destino da rota.");
+  if (!acharLocalPorNome(txtDestino)) return alert("Destino não encontrado. Escolha um local da lista.");
 
-  const caminho = rotaNoGrafo(origem, dest);
-  if (!caminho) {
-    alert(origem.ponto
-      ? "Não foi encontrado um caminho conectado próximo à sua localização. A rota não será substituída por uma linha reta."
-      : `Não há um caminho mapeado conectado entre ${origemNome} e ${dest.nome}.`);
-    return;
-  }
-
-  const pts = caminho.map(no => ({ ...no }));
-  rotaAtual = { pts, metros: comprimento(pts), destino: dest.nome };
+  const planejamento = planejarRota(txtOrigem, txtDestino);
+  if (!planejamento) return alert("Não há um caminho mapeado conectado entre esses locais.");
+  const { origem, destino: dest, pts } = planejamento;
+  rotaAtual = { pts, metros: comprimento(pts), destino: dest.nome, origem: origem.nome };
   desenharGrafo();
   const limites = pts.reduce((b, p) => ({
     minX: Math.min(b.minX, p.x), maxX: Math.max(b.maxX, p.x),
@@ -590,9 +525,10 @@ function iniciarTrajeto() {
   const rota = pontosDeOrientacao(rotaAtual.pts);
   const alertas = alertasDaRota(rotaAtual.pts);
   nav = { pts: rota, idx: 1, destino: rotaAtual.destino, alertas, alertasEmitidos: new Set(), ultimaFala: 0, ultimaInstrucao: "", ultimoTurno: null };
+  limparCamposRota();
   $("nav-alerta").textContent = "";
   mostrarTela("rota");
-  falar(`Trajeto iniciado até ${nav.destino}. ${Math.round(rotaAtual.metros)} metros.`);
+  falar(`Trajeto iniciado de ${rotaAtual.origem} até ${nav.destino}. ${Math.round(rotaAtual.metros)} metros.`);
   if (posUsuario) atualizarNavegacao(); else {
     $("nav-texto").textContent = "Aguardando sua localização… (ou use Simular caminhada)";
     falar("Aguardando sua localização para iniciar as orientações.");
@@ -602,6 +538,7 @@ function iniciarTrajeto() {
 function cancelarTrajeto() {
   nav = null; rotaAtual = null; pararSimulacao();
   pararGuiaVoz();
+  limparCamposRota();
   $("sheet").hidden = true; desenharGrafo();
   $("nav-distancia").textContent = "-- m"; $("nav-restante").textContent = "";
   $("nav-texto").textContent = "Nenhum trajeto ativo. Escolha um destino na aba Mapa.";
@@ -635,7 +572,11 @@ function atualizarNavegacao() {
     $("nav-distancia").textContent = "Chegou!"; $("nav-texto").textContent = nav.destino;
     $("nav-restante").textContent = ""; $("nav-alerta").textContent = "";
     falar(`Você chegou ao destino: ${nav.destino}.`);
-    pararSimulacao(); nav = null; return;
+    pararSimulacao(); nav = null; rotaAtual = null;
+    limparCamposRota();
+    $("sheet").hidden = true;
+    desenharGrafo();
+    return;
   }
   const dir = direcao(posUsuario, alvo);
   $("nav-seta").textContent = "↑"; $("nav-seta").style.transform = `rotate(${dir.ang}deg)`;
@@ -654,7 +595,7 @@ function atualizarNavegacao() {
 
 /* ---------- 10) POSIÇÃO DO USUÁRIO (GPS) e SIMULAÇÃO ---------- */
 
-function atualizaOrigem() { $("origem-input").hidden = !!posUsuario; }
+function atualizaOrigem() { $("origem-input").hidden = false; }
 
 function colocarUsuario(p) {
   posUsuario = p; atualizaOrigem();
@@ -700,10 +641,19 @@ $("btn-simular").addEventListener("click", () => {
 
 $("btn-buscar-rota").addEventListener("click", tracarRota);
 $("btn-cancelar-trajeto").addEventListener("click", cancelarTrajeto);
+$("voice-select").addEventListener("change", () => { idVozSelecionada = $("voice-select").value || "auto"; });
+$("voice-rate").addEventListener("input", () => {
+  $("voice-rate-value").textContent = `${Number($("voice-rate").value).toFixed(2).replace(".", ",")}×`;
+});
 $("toggle-guia-voz").addEventListener("change", () => {
   if (!$("toggle-guia-voz").checked) pararGuiaVoz();
   else if (nav && posUsuario) { nav.ultimaFala = 0; atualizarNavegacao(); }
 });
+
+if ("speechSynthesis" in window) {
+  window.speechSynthesis.onvoiceschanged = atualizarListaVozes;
+  atualizarListaVozes();
+}
 
 /* ---------- 11) ÁLBUM + FIREBASE ---------- */
 
@@ -796,8 +746,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   locais = DADOS.locais;
   $("world").style.width = b.largura + "px"; $("world").style.height = b.altura + "px";
   desenharPins();
-  await carregarGrafo(); atualizaContador();
-  iniciarGestos(); iniciarEditor();
+  await carregarGrafo();
+  iniciarGestos();
   ajustarInicio(); desenharGrafo();
   atualizaOrigem();
   iniciarGPS();

@@ -4,28 +4,32 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-function loadNavigation() {
+function loadNavigation(voices = []) {
   const spoken = [];
+  const alerts = [];
   let cancelCalls = 0;
   const elements = new Map();
   const speechSynthesis = {
+    getVoices() { return voices; },
     speak(utterance) { spoken.push(utterance); },
     cancel() { cancelCalls++; }
   };
   const element = () => ({
     checked: true,
     value: "externo",
+    innerHTML: "",
     addEventListener() {},
     classList: { add() {}, remove() {}, toggle() {} },
-    style: {},
+    style: { setProperty() {} },
     dataset: {},
-    appendChild() {},
+    appendChild(child) { if (child.value === "auto") this.value = "auto"; },
     setAttribute() {},
     click() {}
   });
   const document = {
     querySelectorAll() { return []; },
     querySelector() { return element(); },
+    createElement() { return element(); },
     getElementById(id) {
       if (!elements.has(id)) elements.set(id, element());
       return elements.get(id);
@@ -43,6 +47,7 @@ function loadNavigation() {
     localStorage: { getItem() { return null; }, setItem() {} },
     fetch: async () => ({ ok: false }),
     console,
+    alert(message) { alerts.push(message); },
     Math,
     Date,
     Set,
@@ -51,13 +56,21 @@ function loadNavigation() {
   const source = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
   const bridge = `
     globalThis.navigationTestApi = {
+      element(id) { return $(id); },
       setGraph(nodes, edges) { grafo = { nos: nodes, arestas: edges, seq: 1 }; mpp = 1; },
-      dijkstra, rotaNoGrafo, orientarGiro, pontosDeOrientacao, textoOrientacao, alertasDaRota, falar, falarAlerta,
+      setLocations(items) { locais = items; },
+      setPosition(point) { posUsuario = point; },
+      setData(data) { DADOS = data; },
+      setRoute(route) { rotaAtual = route; },
+      setNavigation(value) { nav = value; },
+      desenharGrafo,
+      dijkstra, rotaNoGrafo, planejarRota, tracarRota, limparCamposRota, escolherVoz, configurarEnunciado,
+      iniciarTrajeto, cancelarTrajeto, atualizarNavegacao, orientarGiro, pontosDeOrientacao, textoOrientacao, alertasDaRota, falar, falarAlerta,
       getSpeechState() { return { falaAtiva, falaOrientacaoPendente, filaAlertas: filaAlertas.slice() }; }
     };
   `;
   vm.runInNewContext(`${source}\n${bridge}`, sandbox, { filename: "app.js" });
-  return { api: sandbox.navigationTestApi, elements, spoken, getCancelCalls: () => cancelCalls };
+  return { api: sandbox.navigationTestApi, elements, spoken, alerts, getCancelCalls: () => cancelCalls };
 }
 
 test("turn instructions are relative and simplify straight segments", () => {
@@ -100,6 +113,66 @@ test("routes use mapped location anchors and never add straight endpoint connect
   assert.deepEqual(Array.from(route, node => node.id), ["L1", "N1", "N2", "L2"]);
   assert.equal(route.some(node => node.x === 1 && node.y === 9), false);
   assert.equal(api.rotaNoGrafo({ id: 999 }, { id: 2 }), null);
+});
+
+test("each planned route uses fresh explicit origin and destination text", () => {
+  const { api } = loadNavigation();
+  const places = [
+    { id: 1, nome: "Bloco A", x: 0, y: 0 },
+    { id: 2, nome: "Bloco B", x: 10, y: 0 },
+    { id: 3, nome: "Bloco C", x: 20, y: 10 }
+  ];
+  api.setLocations(places);
+  api.setGraph(
+    [{ id: "L1", x: 0, y: 0 }, { id: "N1", x: 5, y: 0 }, { id: "L2", x: 10, y: 0 }, { id: "L3", x: 20, y: 10 }],
+    [["L1", "N1", "acesso"], ["N1", "L2", "externo"], ["L2", "L3", "externo"]]
+  );
+  api.setPosition({ x: 0, y: 0 });
+
+  const first = api.planejarRota("Bloco A", "Bloco B");
+  assert.deepEqual(Array.from(first.pts, node => node.id), ["L1", "N1", "L2"]);
+  api.element("origem-input").value = "Bloco A";
+  api.element("destino-input").value = "Bloco B";
+  api.setRoute({ ...first, metros: 10 });
+  api.iniciarTrajeto();
+  assert.equal(api.element("origem-input").value, "");
+  assert.equal(api.element("destino-input").value, "");
+
+  assert.equal(api.planejarRota("", "Bloco C"), null);
+  const second = api.planejarRota("Bloco B", "Bloco C");
+  assert.deepEqual(Array.from(second.pts, node => node.id), ["L2", "L3"]);
+  assert.equal(second.origem.nome, "Bloco B");
+  assert.equal(second.destino.nome, "Bloco C");
+});
+
+test("GPS does not silently replace an empty origin field", () => {
+  const { api, alerts } = loadNavigation();
+  api.setPosition({ x: 10, y: 10 });
+  api.element("origem-input").value = "";
+  api.element("destino-input").value = "Bloco C";
+  api.tracarRota();
+  assert.equal(alerts.length, 1);
+  assert.match(alerts[0], /Informe de onde/);
+});
+
+test("cancelling and completing a route clear endpoint fields", () => {
+  const { api } = loadNavigation();
+  api.setGraph([], []);
+  api.setData({ bbox: { largura: 100, altura: 100 } });
+  api.element("origem-input").value = "Bloco A";
+  api.element("destino-input").value = "Bloco B";
+  api.cancelarTrajeto();
+  assert.equal(api.element("origem-input").value, "");
+  assert.equal(api.element("destino-input").value, "");
+
+  api.element("origem-input").value = "Bloco B";
+  api.element("destino-input").value = "Bloco C";
+  api.setRoute({ pts: [{ x: 0, y: 0, id: "L2" }, { x: 10, y: 0, id: "L3" }], metros: 5, destino: "Bloco C", origem: "Bloco B" });
+  api.setNavigation({ pts: [{ x: 0, y: 0, id: "L2" }, { x: 10, y: 0, id: "L3" }], idx: 1, destino: "Bloco C", alertas: [], alertasEmitidos: new Set(), ultimaFala: 0, ultimaInstrucao: "", ultimoTurno: null });
+  api.setPosition({ x: 10, y: 0 });
+  api.atualizarNavegacao();
+  assert.equal(api.element("origem-input").value, "");
+  assert.equal(api.element("destino-input").value, "");
 });
 
 test("GPS origin must be close to the mapped network and is snapped to a real graph node", () => {
@@ -158,4 +231,52 @@ test("voice queues hazard alerts without cancelling active guidance", () => {
   assert.equal(spoken[1].text, "Atenção: travessia de rua à frente.");
   spoken[1].onend();
   assert.equal(spoken[2].text, "Siga em frente por 10 metros.");
+});
+
+test("automatic voice prefers Brazilian Portuguese, then Portuguese, then browser default", () => {
+  const { api } = loadNavigation();
+  const voices = [
+    { voiceURI: "en", lang: "en-US", default: true },
+    { voiceURI: "pt-pt", lang: "pt-PT", default: false },
+    { voiceURI: "pt-br", lang: "pt-BR", default: false }
+  ];
+  assert.equal(api.escolherVoz(voices).voiceURI, "pt-br");
+  assert.equal(api.escolherVoz(voices.slice(0, 2)).voiceURI, "pt-pt");
+  assert.equal(api.escolherVoz(voices.slice(0, 1)).voiceURI, "en");
+  assert.equal(api.escolherVoz(voices, "pt-pt").voiceURI, "pt-pt");
+  assert.equal(api.escolherVoz(voices, "unavailable").voiceURI, "pt-br");
+});
+
+test("voice settings apply selected native voice and bounded speaking rate", () => {
+  const voice = { voiceURI: "pt-br", lang: "pt-BR" };
+  const { api, spoken } = loadNavigation([voice]);
+  api.element("voice-rate").value = "1.25";
+  api.configurarEnunciado(spoken);
+  assert.equal(spoken.lang, "pt-BR");
+  assert.equal(spoken.voice, voice);
+  assert.equal(spoken.rate, 1.25);
+  api.element("voice-rate").value = "0.5";
+  api.configurarEnunciado(spoken);
+  assert.equal(spoken.rate, 0.75);
+});
+
+test("public map hides the full editable graph and exposes no path editor controls", () => {
+  const { api, elements } = loadNavigation();
+  api.setGraph(
+    [{ id: "A", x: 0, y: 0 }, { id: "B", x: 10, y: 10 }],
+    [["A", "B", "externo"]]
+  );
+  api.setData({ bbox: { largura: 100, altura: 100 } });
+  api.desenharGrafo();
+  assert.equal(elements.get("overlay").innerHTML, "");
+
+  api.setRoute({ pts: [{ x: 0, y: 0 }, { x: 10, y: 10 }], metros: 10, destino: "B" });
+  api.desenharGrafo();
+  assert.equal((elements.get("overlay").innerHTML.match(/<polyline/g) || []).length, 2);
+  assert.doesNotMatch(elements.get("overlay").innerHTML, /<line\b|<circle\b/);
+
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const app = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
+  assert.doesNotMatch(html, /btn-editor|editor-panel|editor-tipo|ed-importar|ed-exportar|ed-arquivo/);
+  assert.doesNotMatch(app, /iniciarEditor|localStorage\.getItem\(["']trilhas_grafo/);
 });
