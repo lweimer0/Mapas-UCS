@@ -192,7 +192,10 @@ button {
     font-weight: 700;
 }
 
-#pins,
+#pins {
+    display: block !important;
+}
+
 #me {
     display: none !important;
 }
@@ -273,7 +276,7 @@ button {
         font-weight: 700;
         color: #fff;
         text-shadow: 0 0 3px #000,0 0 3px #000,0 0 3px #000;
-        display: none;
+        display: block;
     }
 
     .world.perto .pin .rot, .pin.sel .rot {
