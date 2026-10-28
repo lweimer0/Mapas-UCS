@@ -405,8 +405,6 @@ async function carregarGrafo() {
   } catch (e) {}
 }
 
-const noPorId = (id) => grafo.nos.find(n => n.id === id);
-
 function desenharGrafo() {
   const svg = $("overlay");
   const b = DADOS.bbox;
@@ -432,8 +430,11 @@ function aoTocarMapa(cx, cy) {
 
 function noMaisProximoDe(p) {
   let m = null, d0 = Infinity;
-  grafo.nos.forEach(n => { const d = Math.hypot(n.x - p.x, n.y - p.y); if (d < d0) { d0 = d; m = n; } });
+  nosChao.forEach(n => { const d = Math.hypot(n.x - p.x, n.y - p.y); if (d < d0) { d0 = d; m = n; } });
   return m;
+}
+function noDoLocal(l) {
+  return mapaNos.has("L" + l.id) ? "L" + l.id : (noMaisProximoDe({ x: l.x, y: l.y }) || {}).id;
 }
 
 function rotaNoGrafo(origem, destino) {
@@ -455,11 +456,13 @@ function dijkstra(origemId, destinoId) {
     const d = dist(A, B), tipo = tipoAresta(aresta);
     adj[a].push([b, d, tipo]); adj[b].push([a, d, tipo]);
   });
-  const D = {}, prev = {}, nv = new Set(grafo.nos.map(n => n.id));
-  nv.forEach(i => D[i] = Infinity); D[origemId] = 0;
+  if (!adj.has(origemId) || !adj.has(destinoId)) return null;
+  const D = new Map(), prev = new Map(), nv = new Set(adj.keys());
+  nv.forEach(i => D.set(i, Infinity)); D.set(origemId, 0);
   while (nv.size) {
-    let u = null; nv.forEach(i => { if (u === null || D[i] < D[u]) u = i; });
-    if (D[u] === Infinity) break;
+    let u = null, du = Infinity;
+    nv.forEach(i => { const d = D.get(i); if (d < du) { du = d; u = i; } });
+    if (u === null) break;
     nv.delete(u); if (u === destinoId) break;
     adj[u].forEach(([v, w, tipo]) => {
       if (D[u] + w < D[v]) { D[v] = D[u] + w; prev[v] = { no: u, tipo }; }
@@ -540,6 +543,7 @@ function cancelarTrajeto() {
   pararGuiaVoz();
   limparCamposRota();
   $("sheet").hidden = true; desenharGrafo();
+  $("nav-seta").textContent = "↑"; $("nav-seta").style.transform = "none";
   $("nav-distancia").textContent = "-- m"; $("nav-restante").textContent = "";
   $("nav-texto").textContent = "Nenhum trajeto ativo. Escolha um destino na aba Mapa.";
   mostrarTela("mapa");
@@ -564,10 +568,10 @@ function atualizarNavegacao() {
     nav.idx++;
     nav.ultimaInstrucao = "";
   }
-  const alvo = nav.pts[nav.idx];
+  const alvo = g[nav.idx];
   const d = dist(posUsuario, alvo);
 
-  if (nav.idx === nav.pts.length - 1 && d < RAIO_CHEGADA) {
+  if (nav.idx === ultimo && d < RAIO_CHEGADA) {
     $("nav-seta").textContent = "✔"; $("nav-seta").style.transform = "none";
     $("nav-distancia").textContent = "Chegou!"; $("nav-texto").textContent = nav.destino;
     $("nav-restante").textContent = ""; $("nav-alerta").textContent = "";
@@ -626,7 +630,7 @@ function pararSimulacao() {
 $("btn-simular").addEventListener("click", () => {
   if (simTimer) return pararSimulacao();
   if (!nav) return alert("Trace uma rota e toque em \"Iniciar trajeto\" primeiro.");
-  const pts = nav.pts; let seg = 0, t = 0;
+  const pts = nav.full; let seg = 0, t = 0;
   $("btn-simular").textContent = "Parar simulação";
   colocarUsuario({ x: pts[0].x, y: pts[0].y });
   simTimer = setInterval(() => {
