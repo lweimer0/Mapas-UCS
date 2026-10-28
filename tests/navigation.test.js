@@ -277,6 +277,8 @@ test("public map hides the full editable graph and exposes no path editor contro
 
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   const app = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
+  const styles = fs.readFileSync(path.join(__dirname, "..", "style.css"), "utf8");
   assert.doesNotMatch(html, /btn-editor|editor-panel|editor-tipo|ed-importar|ed-exportar|ed-arquivo/);
   assert.doesNotMatch(app, /iniciarEditor|localStorage\.getItem\(["']trilhas_grafo/);
+  assert.doesNotMatch(styles, /\.editor-panel|\.editor-help|\.editor-buttons/);
 });

@@ -280,44 +280,6 @@ button {
             background: var(--ouro);
         }
 
-.editor-panel {
-    margin: -8px 8px 12px;
-    background: #fff;
-    border-radius: 14px;
-    padding: 10px;
-    border: 1px solid var(--ouro);
-}
-
-.editor-help {
-    margin: 0 0 8px;
-    font-size: .76rem;
-    line-height: 1.35;
-}
-
-.editor-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
-    .editor-buttons select {
-        padding: 7px 8px;
-        border: 1px solid var(--cinza);
-        border-radius: 999px;
-        background: #fff;
-        font-size: .76rem;
-        font-weight: 600;
-    }
-
-    .editor-buttons button {
-        padding: 7px 10px;
-        border: 1px solid var(--cinza);
-        border-radius: 999px;
-        background: var(--fundo);
-        font-size: .76rem;
-        font-weight: 600;
-    }
-
 .bottom-sheet {
     margin: -6px 38px 16px;
     background: #fff;
