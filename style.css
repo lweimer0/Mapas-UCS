@@ -121,8 +121,25 @@ button{font-family:var(--fonte-texto);cursor:pointer;}
 }
 .map-controls button.ativo{background:var(--ouro);}
 
+.mapa-legenda{
+  display:flex;flex-wrap:wrap;justify-content:center;gap:6px 12px;
+  margin:-13px 10px 12px;font-size:.68rem;line-height:1.4;color:var(--tinta);
+}
+.mapa-legenda span{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
+.legenda-cor{width:12px;height:5px;border-radius:4px;display:inline-block;}
+.legenda-cor.externo{background:#ec168c;}
+.legenda-cor.interno{background:#20c8d8;}
+.legenda-cor.escadaria{background:#f0d51b;}
+.legenda-cor.rampa{background:#174ed1;}
+.legenda-cor.rua{background:#ef4438;}
+.legenda-cor.alternativo{background:#a34bb8;}
+.legenda-cor.ligacao{background:#38ce43;}
+.legenda-cor.atencao{background:#ed8b26;}
+
 .editor-panel{margin:-8px 8px 12px;background:#fff;border-radius:14px;padding:10px;border:1px solid var(--ouro);}
 .editor-help{margin:0 0 8px;font-size:.76rem;line-height:1.35;}
+.editor-tipo-label{display:block;margin:0 0 4px;font-size:.75rem;font-weight:700;}
+#editor-tipo{width:100%;margin-bottom:8px;padding:8px;border:1px solid var(--cinza);border-radius:8px;background:#fff;font:600 .8rem var(--fonte-texto);}
 .editor-buttons{display:flex;flex-wrap:wrap;gap:6px;}
 .editor-buttons button{
   padding:7px 10px;border:1px solid var(--cinza);border-radius:999px;
@@ -152,6 +169,7 @@ button{font-family:var(--fonte-texto);cursor:pointer;}
 #nav-distancia{font-size:1.6rem;font-weight:700;margin:6px 0 2px;}
 #nav-texto{margin:0;font-size:.95rem;}
 .nav-restante{margin:8px 0 0;font-size:.75rem;opacity:.75;}
+.nav-alerta{margin:10px 0 0;color:#ffe08a;font-size:.85rem;font-weight:700;}
 
 .voice-toggle{
   margin:25px 38px 0;display:flex;align-items:center;gap:14px;

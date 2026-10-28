@@ -44,7 +44,7 @@
 
     <div id="viewport" class="viewport">
       <div id="world" class="world">
-        <img id="mapa-img" src="mapa-campus.jpg" alt="Mapa do campus da UCS" draggable="false">
+        <img id="mapa-img" src="mapa-campus.jpg" alt="Mapa ilustrado do campus da UCS; os caminhos estão coloridos conforme a legenda" draggable="false">
         <svg id="overlay" class="overlay"></svg>
         <div id="pins"></div>
         <div id="me" class="me" hidden></div>
@@ -58,12 +58,33 @@
       </div>
     </div>
 
+    <div class="mapa-legenda" role="group" aria-label="Legenda dos caminhos">
+      <span><i class="legenda-cor externo"></i>Externo</span>
+      <span><i class="legenda-cor interno"></i>Interno</span>
+      <span><i class="legenda-cor escadaria"></i>Escadaria</span>
+      <span><i class="legenda-cor rampa"></i>Rampa</span>
+      <span><i class="legenda-cor rua"></i>Rua / travessia</span>
+      <span><i class="legenda-cor alternativo"></i>Alternativo</span>
+      <span><i class="legenda-cor ligacao"></i>Ligação</span>
+      <span><i class="legenda-cor atencao"></i>Atenção</span>
+    </div>
+
     <!-- Editor de caminhos (grupo desenha os trajetos a pé) -->
     <div id="editor-panel" class="editor-panel" hidden>
       <p class="editor-help">
         <strong>Editor de caminhos:</strong> toque no mapa para criar pontos; cada toque liga ao ponto anterior.
-        Toque num bloco para usá-lo como ponto. <em id="editor-contador"></em>
+        Toque num bloco para usá-lo como ponto. Escolha o tipo antes de desenhar. <em id="editor-contador"></em>
       </p>
+      <label class="editor-tipo-label" for="editor-tipo">Tipo do próximo trecho</label>
+      <select id="editor-tipo" aria-label="Tipo do próximo trecho">
+        <option value="externo">Caminho externo</option>
+        <option value="interno">Caminho interno</option>
+        <option value="escadaria">Escadaria</option>
+        <option value="rampa">Rampa</option>
+        <option value="rua">Rua ou travessia</option>
+        <option value="alternativo">Caminho alternativo</option>
+        <option value="ligacao">Ligação</option>
+      </select>
       <div class="editor-buttons">
         <button id="ed-terminar">Terminar traço</button>
         <button id="ed-apagar">Apagar ponto</button>
@@ -87,11 +108,12 @@
       <div id="nav-seta" class="nav-seta">↑</div>
       <p id="nav-distancia">-- m</p>
       <p id="nav-texto">Nenhum trajeto ativo. Escolha um destino na aba Mapa.</p>
+      <p id="nav-alerta" class="nav-alerta" role="alert" aria-live="assertive"></p>
       <p id="nav-restante" class="nav-restante"></p>
     </div>
 
     <label class="voice-toggle">
-      <input type="checkbox" id="toggle-guia-voz">
+      <input type="checkbox" id="toggle-guia-voz" checked>
       Guia por voz ativo
     </label>
 
