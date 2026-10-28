@@ -64,6 +64,7 @@ function loadNavigation(voices = []) {
       setGraph(nodes, edges) { grafo = { nos: nodes, arestas: edges, seq: 1 }; mpp = 1; },
       setLocations(items) { locais = items; },
       setPosition(point) { posUsuario = point; },
+      colocarUsuario,
       setData(data) { DADOS = data; },
       setViewport(width, height) { $("viewport").getBoundingClientRect = () => ({ width, height, left: 0, top: 0 }); },
       setView(value) { view = { ...view, ...value }; },
@@ -328,8 +329,23 @@ test("map viewport shows only the image and active route, with controls outside 
   assert.match(html, /id="pins"[^>]*aria-hidden="true"[^>]*hidden/);
   assert.match(html, /id="me"[^>]*aria-hidden="true"[^>]*hidden/);
   assert.match(styles, /#pins\s*\{\s*display:\s*block !important;/);
-  assert.match(styles, /#me\s*\{\s*display:\s*none !important;/);
+  assert.doesNotMatch(styles, /#me\s*\{[^}]*display:\s*none\s*!important;/);
   assert.doesNotMatch(styles, /\.map-controls\s*\{[^}]*position:\s*absolute;/s);
+});
+
+test("user location marker becomes visible and follows updated positions", () => {
+  const { api } = loadNavigation();
+  const marker = api.element("me");
+
+  api.colocarUsuario({ x: 25, y: 40 });
+  assert.equal(marker.hidden, false);
+  assert.equal(marker.style.left, "25px");
+  assert.equal(marker.style.top, "40px");
+
+  api.colocarUsuario({ x: 60, y: 75 });
+  assert.equal(marker.hidden, false);
+  assert.equal(marker.style.left, "60px");
+  assert.equal(marker.style.top, "75px");
 });
 
 test("map pan and zoom cannot expose empty space around the image", () => {

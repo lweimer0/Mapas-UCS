@@ -196,10 +196,6 @@ button {
     display: block !important;
 }
 
-#me {
-    display: none !important;
-}
-
 .world {
     position: absolute;
     left: 0;
