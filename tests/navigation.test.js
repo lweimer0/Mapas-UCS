@@ -282,3 +282,10 @@ test("public map hides the full editable graph and exposes no path editor contro
   assert.doesNotMatch(app, /iniciarEditor|localStorage\.getItem\(["']trilhas_grafo/);
   assert.doesNotMatch(styles, /\.editor-panel|\.editor-help|\.editor-buttons/);
 });
+
+test("map image and route overlay retain the positioning styles needed to render", () => {
+  const styles = fs.readFileSync(path.join(__dirname, "..", "style.css"), "utf8");
+  assert.match(styles, /\.world\s*\{[^}]*position:\s*absolute;[^}]*transform-origin:\s*0 0;/s);
+  assert.match(styles, /\.world img\s*\{[^}]*display:\s*block;[^}]*max-width:\s*none;/s);
+  assert.match(styles, /\.overlay\s*\{[^}]*position:\s*absolute;[^}]*pointer-events:\s*none;/s);
+});
