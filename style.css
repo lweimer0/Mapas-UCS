@@ -160,6 +160,35 @@ button {
         font: 400 .78rem var(--fonte-titulo);
     }
 
+.route-preference {
+    margin: 10px 14px 0;
+    color: var(--tinta);
+    font-size: .78rem;
+}
+
+.route-preference label {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.route-preference input {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    margin: 0;
+    accent-color: var(--azul);
+}
+
+.route-preference p {
+    margin: 4px 0 0 29px;
+    color: var(--cinza);
+    font-size: .7rem;
+    line-height: 1.35;
+}
+
 .viewport {
     position: relative;
     flex: 1;

@@ -40,6 +40,13 @@
       <input id="destino-input" list="lista-locais" type="text" placeholder="Para onde você vai?" autocomplete="off">
       <button id="btn-buscar-rota">Buscar rota</button>
     </div>
+    <div class="route-preference">
+      <label for="evitar-alternativos">
+        <input id="evitar-alternativos" type="checkbox">
+        Tenho deficiência visual — evitar caminhos alternativos
+      </label>
+      <p>O filtro só pode evitar trechos identificados como alternativos. O mapa atual ainda não tem trechos com essa classificação.</p>
+    </div>
     <datalist id="lista-locais"></datalist>
 
     <div class="map-controls" role="group" aria-label="Controles do mapa">

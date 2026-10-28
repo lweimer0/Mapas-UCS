@@ -35,7 +35,11 @@ function loadNavigation(voices = [], speechSupported = true) {
     querySelector() { return element(); },
     createElement() { return element(); },
     getElementById(id) {
-      if (!elements.has(id)) elements.set(id, element());
+      if (!elements.has(id)) {
+        const created = element();
+        if (id === "evitar-alternativos") created.checked = false;
+        elements.set(id, created);
+      }
       return elements.get(id);
     }
   };
@@ -65,6 +69,7 @@ function loadNavigation(voices = [], speechSupported = true) {
       setGraph(nodes, edges) { grafo = { nos: nodes, arestas: edges, seq: 1 }; mpp = 1; },
       setLocations(items) { locais = items; },
       setPosition(point) { posUsuario = point; },
+      setAvoidAlternatives(value) { $("evitar-alternativos").checked = value; },
       colocarUsuario,
       setData(data) { DADOS = data; },
       setViewport(width, height) { $("viewport").getBoundingClientRect = () => ({ width, height, left: 0, top: 0 }); },
@@ -115,6 +120,110 @@ test("Dijkstra preserves the type of each selected route segment", () => {
   assert.equal(route[1].tipoAresta, "interno");
   assert.equal(route[2].tipoAresta, "interno");
   assert.equal(api.dijkstra("A", "missing"), null);
+});
+
+test("visual impairment preference excludes explicitly alternative route edges", () => {
+  const { api } = loadNavigation();
+  api.setLocations([
+    { id: 1, nome: "Bloco A", x: 0, y: 0 },
+    { id: 2, nome: "Bloco B", x: 10, y: 0 }
+  ]);
+  api.setGraph(
+    [
+      { id: "L1", x: 0, y: 0 },
+      { id: "L2", x: 10, y: 0 },
+      { id: "N1", x: 2, y: 3 },
+      { id: "N2", x: 8, y: 3 }
+    ],
+    [
+      ["L1", "L2", "caminho alternativo"],
+      ["L1", "N1", "externo"],
+      ["N1", "N2", "externo"],
+      ["N2", "L2", "externo"]
+    ]
+  );
+
+  const unrestricted = api.planejarRota("Bloco A", "Bloco B");
+  assert.deepEqual(Array.from(unrestricted.pts, point => point.id), ["L1", "L2"]);
+
+  api.setAvoidAlternatives(true);
+  const accessible = api.planejarRota("Bloco A", "Bloco B");
+  assert.deepEqual(Array.from(accessible.pts, point => point.id), ["L1", "N1", "N2", "L2"]);
+  assert.equal(accessible.pts.some(point => point.tipoAresta === "caminho alternativo"), false);
+
+  api.setGraph(
+    [{ id: "L1", x: 0, y: 0 }, { id: "L2", x: 10, y: 0 }],
+    [["L1", "L2", "rota alternativa"]]
+  );
+  assert.equal(api.planejarRota("Bloco A", "Bloco B"), null);
+});
+
+test("campus graph tags only the violet segments confirmed on the annotated map", () => {
+  const graph = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "caminhos.json"), "utf8"));
+  const key = (a, b) => [a, b].sort().join("|");
+  const tagged = graph.arestas.filter(edge => {
+    const tags = Array.isArray(edge) ? edge[3] : edge.tags;
+    return Array.isArray(tags) && tags.includes("alternativo");
+  });
+  const expected = [
+    ["N29", "N30"], ["N30", "N31"], ["N163", "N164"], ["N164", "N165"],
+    ["N165", "N166"], ["N166", "N167"], ["N168", "N169"], ["N170", "N162"],
+    ["N153", "N224"], ["N241", "N242"], ["N253", "N255"], ["N241", "N375"],
+    ["N399", "N400"], ["N402", "N403"], ["N408", "N409"], ["N424", "N425"],
+    ["N426", "N427"], ["N427", "N428"], ["N470", "N471"], ["N473", "N467"],
+    ["N407", "N487"], ["N488", "N486"], ["N571", "N467"], ["N605", "N604"],
+    ["N606", "N607"], ["N607", "N608"], ["N612", "N613"], ["N613", "N614"],
+    ["N614", "N586"], ["N587", "N617"], ["N618", "N623"], ["N625", "N624"],
+    ["N646", "N774"], ["N652", "N742"], ["N625", "N654"], ["N676", "N674"],
+    ["N706", "N467"], ["N742", "N604"], ["N774", "N647"], ["N777", "N605"],
+    ["N801", "N5"]
+  ];
+  assert.deepEqual(tagged.map(edge => key(edge[0], edge[1])).sort(), expected.map(([a, b]) => key(a, b)).sort());
+  assert.ok(tagged.every(edge => (Array.isArray(edge) ? edge[2] : edge.tipo) !== "alternativo"));
+});
+
+test("real campus locations use the checkbox to avoid violet edges when a detour exists", () => {
+  const graph = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "caminhos.json"), "utf8"));
+  const alternativeEdges = graph.arestas.filter(edge => {
+    const tags = Array.isArray(edge) ? edge[3] : edge.tags;
+    return Array.isArray(tags) && tags.includes("alternativo");
+  });
+  const alternativePairs = new Set(alternativeEdges.map(edge => [edge[0], edge[1]].sort().join("|")));
+  const { api } = loadNavigation();
+  api.setGraph(graph.nos, graph.arestas);
+
+  const usesAlternative = route => route.slice(1).some((point, index) =>
+    alternativePairs.has([route[index].id, point.id].sort().join("|"))
+  );
+  api.setAvoidAlternatives(false);
+  const unrestricted = api.rotaNoGrafo({ id: 5 }, { id: 12 });
+  assert.ok(unrestricted);
+  assert.ok(usesAlternative(unrestricted), "expected the unfiltered L5-to-L12 route to use a tagged violet edge");
+
+  api.setAvoidAlternatives(true);
+  const accessible = api.rotaNoGrafo({ id: 5 }, { id: 12 });
+  assert.ok(accessible, "expected the real graph to provide an accessible detour");
+  assert.equal(usesAlternative(accessible), false);
+});
+
+test("alternative tags preserve a route segment's original category", () => {
+  const { api } = loadNavigation();
+  api.setGraph(
+    [{ id: "A", x: 0, y: 0 }, { id: "B", x: 10, y: 0 }, { id: "C", x: 0, y: 10 }, { id: "D", x: 10, y: 10 }],
+    [["A", "B", "interno", ["alternativo"]], ["A", "C", "externo"], ["C", "D", "externo"], ["D", "B", "externo"]]
+  );
+  const unrestricted = api.dijkstra("A", "B");
+  assert.deepEqual(Array.from(unrestricted, point => point.id), ["A", "B"]);
+  assert.equal(unrestricted[1].tipoAresta, "interno");
+  const accessible = api.dijkstra("A", "B", true);
+  assert.deepEqual(Array.from(accessible, point => point.id), ["A", "C", "D", "B"]);
+});
+
+test("map offers an unchecked, labeled visual impairment route preference", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  assert.match(html, /<label for="evitar-alternativos">[\s\S]*?<input id="evitar-alternativos" type="checkbox">[\s\S]*?Tenho deficiência visual — evitar caminhos alternativos/);
+  assert.match(html, /O filtro só pode evitar trechos identificados como alternativos/);
+  assert.doesNotMatch(html, /id="evitar-alternativos"[^>]*checked/);
 });
 
 test("routes use mapped location anchors and never add straight endpoint connectors", () => {

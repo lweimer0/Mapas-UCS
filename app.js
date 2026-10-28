@@ -192,6 +192,15 @@ function tipoAresta(aresta) {
   return Array.isArray(aresta) ? aresta[2] || "caminho" : aresta.tipo || "caminho";
 }
 
+function arestaAlternativa(aresta) {
+  const tags = Array.isArray(aresta) ? aresta[3] : aresta.tags;
+  const classificacoes = [tipoAresta(aresta), ...(Array.isArray(tags) ? tags : [])];
+  return classificacoes.some(classificacao => {
+    const normalizado = normaliza(String(classificacao)).replace(/[_-]+/g, " ");
+    return /^(?:(?:caminho|rota)\s+)?alternativ[oa]s?$/.test(normalizado);
+  });
+}
+
 function pontasAresta(aresta) {
   return Array.isArray(aresta)
     ? { a: aresta[0], b: aresta[1] }
@@ -501,17 +510,18 @@ function rotaNoGrafo(origem, destino) {
   const noDestino = noPorId(`L${destino.id}`);
   if (!noOrigem || !noDestino) return null;
   if (temPontoGPS && dist(origem.ponto, noOrigem) > LIMITE_ANCORAGEM_GPS) return null;
-  const caminho = dijkstra(noOrigem.id, noDestino.id);
+  const caminho = dijkstra(noOrigem.id, noDestino.id, $("evitar-alternativos").checked);
   return caminho && caminho.length > 1 ? caminho : null;
 }
 
-function dijkstra(origemId, destinoId) {
+function dijkstra(origemId, destinoId, evitarAlternativos = false) {
   const adj = {};
   grafo.nos.forEach(n => adj[n.id] = []);
   grafo.arestas.forEach(aresta => {
     const { a, b } = pontasAresta(aresta);
     const A = noPorId(a), B = noPorId(b); if (!A || !B) return;
     const d = dist(A, B), tipo = tipoAresta(aresta);
+    if (evitarAlternativos && arestaAlternativa(aresta)) return;
     adj[a].push([b, d, tipo]); adj[b].push([a, d, tipo]);
   });
   if (!Object.prototype.hasOwnProperty.call(adj, origemId) ||
