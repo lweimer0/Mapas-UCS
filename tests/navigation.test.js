@@ -52,7 +52,7 @@ function loadNavigation() {
   const bridge = `
     globalThis.navigationTestApi = {
       setGraph(nodes, edges) { grafo = { nos: nodes, arestas: edges, seq: 1 }; mpp = 1; },
-      dijkstra, orientarGiro, pontosDeOrientacao, textoOrientacao, alertasDaRota, falar, falarAlerta,
+      dijkstra, rotaNoGrafo, orientarGiro, pontosDeOrientacao, textoOrientacao, alertasDaRota, falar, falarAlerta,
       getSpeechState() { return { falaAtiva, falaOrientacaoPendente, filaAlertas: filaAlertas.slice() }; }
     };
   `;
@@ -83,6 +83,34 @@ test("Dijkstra preserves the type of each selected route segment", () => {
   assert.equal(route[1].tipoAresta, "interno");
   assert.equal(route[2].tipoAresta, "interno");
   assert.equal(api.dijkstra("A", "missing"), null);
+});
+
+test("routes use mapped location anchors and never add straight endpoint connectors", () => {
+  const { api } = loadNavigation();
+  api.setGraph(
+    [
+      { id: "L1", x: 0, y: 0 },
+      { id: "N1", x: 10, y: 0 },
+      { id: "N2", x: 10, y: 10 },
+      { id: "L2", x: 20, y: 10 }
+    ],
+    [["L1", "N1", "acesso"], ["N1", "N2", "externo"], ["N2", "L2", "acesso"]]
+  );
+  const route = api.rotaNoGrafo({ id: 1 }, { id: 2 });
+  assert.deepEqual(Array.from(route, node => node.id), ["L1", "N1", "N2", "L2"]);
+  assert.equal(route.some(node => node.x === 1 && node.y === 9), false);
+  assert.equal(api.rotaNoGrafo({ id: 999 }, { id: 2 }), null);
+});
+
+test("GPS origin must be close to the mapped network and is snapped to a real graph node", () => {
+  const { api } = loadNavigation();
+  api.setGraph(
+    [{ id: "N1", x: 10, y: 0 }, { id: "N2", x: 20, y: 0 }, { id: "L2", x: 30, y: 0 }],
+    [["N1", "N2", "externo"], ["N2", "L2", "acesso"]]
+  );
+  const route = api.rotaNoGrafo({ ponto: { x: 11, y: 0 } }, { id: 2 });
+  assert.deepEqual(Array.from(route, node => node.id), ["N1", "N2", "L2"]);
+  assert.equal(api.rotaNoGrafo({ ponto: { x: 100, y: 100 } }, { id: 2 }), null);
 });
 
 test("spoken guidance uses distance and relative turns, not compass directions", () => {

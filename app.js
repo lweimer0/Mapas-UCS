@@ -28,6 +28,7 @@ const OBRAS_DE_ARTE = [
 const VELOCIDADE_A_PE = 1.3;     // m/s (~78 m/min)
 const RAIO_CHEGADA = 10;         // metros para considerar que chegou num ponto
 const RAIO_ALERTA = 22;
+const LIMITE_ANCORAGEM_GPS = 35;
 const INTERVALO_ORIENTACAO = 10000;
 const STORAGE_GRAFO = "trilhas_grafo_v2";
 const TIPOS_CAMINHO = {
@@ -503,6 +504,16 @@ function noMaisProximoDe(p) {
   return m;
 }
 
+function rotaNoGrafo(origem, destino) {
+  const temPontoGPS = !!origem.ponto;
+  const noOrigem = temPontoGPS ? noMaisProximoDe(origem.ponto) : noPorId(`L${origem.id}`);
+  const noDestino = noPorId(`L${destino.id}`);
+  if (!noOrigem || !noDestino) return null;
+  if (temPontoGPS && dist(origem.ponto, noOrigem) > LIMITE_ANCORAGEM_GPS) return null;
+  const caminho = dijkstra(noOrigem.id, noDestino.id);
+  return caminho && caminho.length > 1 ? caminho : null;
+}
+
 function dijkstra(origemId, destinoId) {
   const adj = {};
   grafo.nos.forEach(n => adj[n.id] = []);
@@ -539,31 +550,31 @@ function tracarRota() {
   const dest = acharLocalPorNome($("destino-input").value);
   if (!dest) return alert("Escolha um destino da lista (comece a digitar o nome do bloco).");
 
-  let origemPt, origemNome;
+  let origem, origemNome;
   const txtOrigem = $("origem-input").value.trim();
   if (txtOrigem) {
-    const o = acharLocalPorNome(txtOrigem);
-    if (!o) return alert("Origem não encontrada. Deixe vazio para usar sua localização.");
-    origemPt = { x: o.x, y: o.y }; origemNome = o.nome;
-  } else if (posUsuario) { origemPt = posUsuario; origemNome = "sua localização"; }
+    origem = acharLocalPorNome(txtOrigem);
+    if (!origem) return alert("Origem não encontrada. Deixe vazio para usar sua localização.");
+    origemNome = origem.nome;
+  } else if (posUsuario) { origem = { ponto: posUsuario }; origemNome = "sua localização"; }
   else return alert("Sem localização do GPS ainda. Escolha uma origem na lista (campo \"De:\").");
 
-  const destPt = { x: dest.x, y: dest.y };
-  let pts = null;
-
-  if (grafo.nos.length >= 2) {
-    const nA = noMaisProximoDe(origemPt), nB = noMaisProximoDe(destPt);
-    const caminho = nA && nB ? dijkstra(nA.id, nB.id) : null;
-    if (caminho) pts = [origemPt, ...caminho, destPt];
-  }
-  if (!pts) {
-    alert("Não há um caminho mapeado entre esses locais. A rota não será substituída por uma linha reta.");
+  const caminho = rotaNoGrafo(origem, dest);
+  if (!caminho) {
+    alert(origem.ponto
+      ? "Não foi encontrado um caminho conectado próximo à sua localização. A rota não será substituída por uma linha reta."
+      : `Não há um caminho mapeado conectado entre ${origemNome} e ${dest.nome}.`);
     return;
   }
 
+  const pts = caminho.map(no => ({ ...no }));
   rotaAtual = { pts, metros: comprimento(pts), destino: dest.nome };
   desenharGrafo();
-  centralizarEm({ x: (origemPt.x + destPt.x) / 2, y: (origemPt.y + destPt.y) / 2 }, Math.min(view.s, 0.9));
+  const limites = pts.reduce((b, p) => ({
+    minX: Math.min(b.minX, p.x), maxX: Math.max(b.maxX, p.x),
+    minY: Math.min(b.minY, p.y), maxY: Math.max(b.maxY, p.y)
+  }), { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity });
+  centralizarEm({ x: (limites.minX + limites.maxX) / 2, y: (limites.minY + limites.maxY) / 2 }, Math.min(view.s, 0.9));
 
   const min = Math.max(1, Math.round(rotaAtual.metros / VELOCIDADE_A_PE / 60));
   sheet(`${dest.nome}`, `${Math.round(rotaAtual.metros)} m · ${min} min a pé`, [
