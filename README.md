@@ -1,2 +1,14 @@
 # Mapas-UCS
 Trabalho da disciplina de Ciência Tecnologia Inovação e Sociedade da Universidade de Caxias do Sul
+
+## Mapa e orientação acessível
+
+O mapa ilustrado (`mapa-campus.jpg`) permanece como base visual de referência; o grafo de `caminhos.json` é usado internamente para calcular rotas e alertas. O site público não oferece editor nem desenha a rede inteira: somente a rota escolhida aparece sobre o mapa. A rede inclui categorias como externo, interno, travessia, atenção, acesso e ligação. O roteamento traça somente nós e trechos mapeados: cada local precisa de uma âncora, e a localização GPS só é aceita quando está a até 35 metros de um nó mapeado. O app não desenha ligações retas artificiais para dentro ou fora da rede. O grafo atual não classifica trechos como escadaria, rampa ou caminho alternativo, portanto esses alertas dependem de dados corretos nessa categoria. **A remoção do editor e da camada completa é uma mudança da interface, não controle de acesso:** como o site é estático, o arquivo `caminhos.json` continua sendo baixado pelo navegador para que o roteamento funcione.
+
+Com o guia por voz ativado, as instruções usam movimento relativo (“Siga em frente”, “Vire à esquerda/direita”), informam a distância até a próxima mudança e repetem a orientação a cada dez segundos enquanto a localização é atualizada. Alertas de travessia, escadaria, rampa e locais marcados para atenção entram na fila de fala sem interromper a orientação em andamento. O guia começa ativado e pode ser desligado na tela da rota.
+
+Para cada trajeto, informe explicitamente a origem e o destino; a localização GPS não preenche a origem automaticamente. Os campos são limpos quando o trajeto começa e também ao concluir ou cancelar, evitando reutilizar um ponto inicial sem perceber. Na tela de rota, é possível escolher uma voz nativa em português disponível no navegador ou deixar a seleção automática, que prioriza português do Brasil, depois outras vozes em português e por fim a voz padrão do dispositivo. O controle de velocidade permite ajustar o ritmo da fala. A qualidade e as opções de voz variam conforme o navegador e as vozes instaladas no aparelho; o projeto não inclui arquivos externos de voz.
+
+**Limite de precisão:** a imagem ajuda a identificar o traçado geral, mas não permite confirmar coordenadas exatas, inclinações, a posição precisa de escadarias/rampas nem as condições atuais das travessias. Os alertas desses tipos só podem ser emitidos quando o trecho correspondente estiver classificado no grafo. Se não existir caminho conectado no grafo, o app não oferece navegação por linha reta. Distâncias e posição também dependem da escala estimada do mapa e da precisão do GPS; confirme travessias no local e não use a rota como substituto de sinalização ou assistência presencial.
+
+Os testes de navegação podem ser executados com `node --test tests/navigation.test.js`.
