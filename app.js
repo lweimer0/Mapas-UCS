@@ -59,6 +59,7 @@ let posUsuario = null;           // {x,y} em pixels
 let watchId = null;
 let simTimer = null;
 let falaAtiva = false;
+let enunciadoAtivo = null;
 let falaOrientacaoPendente = "";
 let filaAlertas = [];
 let vozesDisponiveis = [];
@@ -124,20 +125,43 @@ function configurarEnunciado(utterance) {
   utterance.rate = Number.isFinite(taxa) ? Math.min(1.25, Math.max(0.75, taxa)) : 0.95;
 }
 
+function desbloquearSinteseDeVoz() {
+  if (!("speechSynthesis" in window)) return false;
+  const sintese = window.speechSynthesis;
+  if (typeof sintese.resume === "function") sintese.resume();
+  return true;
+}
+
 function processarFilaDeFala() {
   if (falaAtiva || !$("toggle-guia-voz").checked || !("speechSynthesis" in window)) return;
   const alerta = filaAlertas.shift();
   const texto = alerta ? alerta.texto : falaOrientacaoPendente;
   if (!texto) return;
   if (!alerta) falaOrientacaoPendente = "";
-  falaAtiva = true;
   const u = new SpeechSynthesisUtterance(texto);
   configurarEnunciado(u);
-  u.onend = u.onerror = () => {
+  falaAtiva = true;
+  enunciadoAtivo = u;
+  const concluir = () => {
+    if (enunciadoAtivo !== u) return;
+    enunciadoAtivo = null;
     falaAtiva = false;
     processarFilaDeFala();
   };
-  window.speechSynthesis.speak(u);
+  u.onend = concluir;
+  u.onerror = (event) => {
+    if (enunciadoAtivo !== u) return;
+    status(`erro no guia por voz${event && event.error ? `: ${event.error}` : ""}`);
+    concluir();
+  };
+  try {
+    desbloquearSinteseDeVoz();
+    window.speechSynthesis.speak(u);
+  } catch (error) {
+    status("não foi possível iniciar o guia por voz");
+    concluir();
+    console.error("Speech synthesis error:", error);
+  }
 }
 
 function falar(texto) {
@@ -157,6 +181,7 @@ function pararGuiaVoz() {
   falaOrientacaoPendente = "";
   filaAlertas = [];
   falaAtiva = false;
+  enunciadoAtivo = null;
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
 }
 
@@ -241,10 +266,21 @@ function mostrarTela(nome) {
 /* ---------- 5) MAPA: pan / zoom ---------- */
 
 function atualizaTransform() {
+  limitarMapaAoViewport();
   const w = $("world");
   w.style.transform = `translate(${view.tx}px,${view.ty}px) scale(${view.s})`;
   w.style.setProperty("--inv", 1 / view.s);
   w.classList.toggle("perto", view.s > 0.55);
+}
+
+function limitarMapaAoViewport() {
+  if (!DADOS) return;
+  const vp = $("viewport").getBoundingClientRect();
+  const b = DADOS.bbox;
+  const escalaMinima = Math.max(vp.width / b.largura, vp.height / b.altura);
+  view.s = Math.max(escalaMinima, Math.min(view.s, 2.5));
+  view.tx = Math.min(0, Math.max(vp.width - b.largura * view.s, view.tx));
+  view.ty = Math.min(0, Math.max(vp.height - b.altura * view.s, view.ty));
 }
 
 function ajustarInicio() {
@@ -259,7 +295,9 @@ function ajustarInicio() {
 function zoomEm(fator, cx, cy) {
   const vp = $("viewport").getBoundingClientRect();
   if (cx === undefined) { cx = vp.width / 2; cy = vp.height / 2; }
-  const novo = Math.min(Math.max(view.s * fator, 0.15), 2.5);
+  const b = DADOS.bbox;
+  const minimo = Math.max(vp.width / b.largura, vp.height / b.altura);
+  const novo = Math.max(minimo, Math.min(view.s * fator, 2.5));
   const f = novo / view.s;
   view.tx = cx - (cx - view.tx) * f;
   view.ty = cy - (cy - view.ty) * f;
@@ -524,6 +562,7 @@ function tracarRota() {
 
 function iniciarTrajeto() {
   if (!rotaAtual) return;
+  desbloquearSinteseDeVoz();
   const rota = pontosDeOrientacao(rotaAtual.pts);
   const alertas = alertasDaRota(rotaAtual.pts);
   nav = { pts: rota, idx: 1, destino: rotaAtual.destino, alertas, alertasEmitidos: new Set(), ultimaFala: 0, ultimaInstrucao: "", ultimoTurno: null };
@@ -650,7 +689,10 @@ $("voice-rate").addEventListener("input", () => {
 });
 $("toggle-guia-voz").addEventListener("change", () => {
   if (!$("toggle-guia-voz").checked) pararGuiaVoz();
-  else if (nav && posUsuario) { nav.ultimaFala = 0; atualizarNavegacao(); }
+  else {
+    desbloquearSinteseDeVoz();
+    if (nav && posUsuario) { nav.ultimaFala = 0; atualizarNavegacao(); }
+  }
 });
 
 if ("speechSynthesis" in window) {

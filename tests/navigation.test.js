@@ -8,11 +8,14 @@ function loadNavigation(voices = []) {
   const spoken = [];
   const alerts = [];
   let cancelCalls = 0;
+  let resumeCalls = 0;
   const elements = new Map();
   const speechSynthesis = {
+    paused: true,
     getVoices() { return voices; },
     speak(utterance) { spoken.push(utterance); },
-    cancel() { cancelCalls++; }
+    cancel() { cancelCalls++; },
+    resume() { resumeCalls++; this.paused = false; }
   };
   const element = () => ({
     checked: true,
@@ -21,6 +24,7 @@ function loadNavigation(voices = []) {
     addEventListener() {},
     classList: { add() {}, remove() {}, toggle() {} },
     style: { setProperty() {} },
+    getBoundingClientRect() { return { width: 100, height: 100, left: 0, top: 0 }; },
     dataset: {},
     appendChild(child) { if (child.value === "auto") this.value = "auto"; },
     setAttribute() {},
@@ -61,8 +65,12 @@ function loadNavigation(voices = []) {
       setLocations(items) { locais = items; },
       setPosition(point) { posUsuario = point; },
       setData(data) { DADOS = data; },
+      setViewport(width, height) { $("viewport").getBoundingClientRect = () => ({ width, height, left: 0, top: 0 }); },
+      setView(value) { view = { ...view, ...value }; },
+      getView() { return { ...view }; },
       setRoute(route) { rotaAtual = route; },
       setNavigation(value) { nav = value; },
+      atualizaTransform, zoomEm,
       desenharGrafo,
       dijkstra, rotaNoGrafo, planejarRota, tracarRota, limparCamposRota, escolherVoz, configurarEnunciado,
       iniciarTrajeto, cancelarTrajeto, atualizarNavegacao, orientarGiro, pontosDeOrientacao, textoOrientacao, alertasDaRota, falar, falarAlerta,
@@ -70,7 +78,14 @@ function loadNavigation(voices = []) {
     };
   `;
   vm.runInNewContext(`${source}\n${bridge}`, sandbox, { filename: "app.js" });
-  return { api: sandbox.navigationTestApi, elements, spoken, alerts, getCancelCalls: () => cancelCalls };
+  return {
+    api: sandbox.navigationTestApi,
+    elements,
+    spoken,
+    alerts,
+    getCancelCalls: () => cancelCalls,
+    getResumeCalls: () => resumeCalls
+  };
 }
 
 test("turn instructions are relative and simplify straight segments", () => {
@@ -233,6 +248,22 @@ test("voice queues hazard alerts without cancelling active guidance", () => {
   assert.equal(spoken[2].text, "Siga em frente por 10 metros.");
 });
 
+test("voice resumes browser speech and continues the queue after playback errors", () => {
+  const { api, spoken, elements, getResumeCalls } = loadNavigation();
+  api.falar("Siga em frente por 20 metros.");
+  api.falarAlerta("Atenção: travessia à frente.", "crossing-1");
+
+  assert.equal(spoken.length, 1);
+  assert.ok(getResumeCalls() > 0);
+  assert.equal(api.getSpeechState().falaAtiva, true);
+  spoken[0].onerror({ error: "not-allowed" });
+  assert.match(elements.get("user-status").textContent, /erro no guia por voz: not-allowed/);
+  assert.equal(spoken.length, 2);
+  assert.equal(spoken[1].text, "Atenção: travessia à frente.");
+  spoken[1].onend();
+  assert.equal(api.getSpeechState().falaAtiva, false);
+});
+
 test("automatic voice prefers Brazilian Portuguese, then Portuguese, then browser default", () => {
   const { api } = loadNavigation();
   const voices = [
@@ -296,6 +327,34 @@ test("map viewport shows only the image and active route, with controls outside 
   assert.match(html, /<div class="map-controls"[\s\S]*?<\/div>\s*<div id="viewport"/);
   assert.match(html, /id="pins"[^>]*aria-hidden="true"[^>]*hidden/);
   assert.match(html, /id="me"[^>]*aria-hidden="true"[^>]*hidden/);
-  assert.match(styles, /#pins,\s*#me\s*\{\s*display:\s*none !important;/);
+  assert.match(styles, /#pins\s*\{\s*display:\s*block !important;/);
+  assert.match(styles, /#me\s*\{\s*display:\s*none !important;/);
   assert.doesNotMatch(styles, /\.map-controls\s*\{[^}]*position:\s*absolute;/s);
+});
+
+test("map pan and zoom cannot expose empty space around the image", () => {
+  const { api, elements } = loadNavigation();
+  api.setData({ bbox: { largura: 200, altura: 100 } });
+  api.setViewport(100, 100);
+  api.setView({ s: 0.1, tx: 1000, ty: 1000 });
+  api.atualizaTransform();
+  let view = api.getView();
+  assert.equal(view.s, 1);
+  assert.equal(view.tx, 0);
+  assert.equal(view.ty, 0);
+
+  api.zoomEm(2);
+  api.setView({ tx: 1000, ty: 1000 });
+  api.atualizaTransform();
+  view = api.getView();
+  assert.equal(view.s, 2);
+  assert.equal(view.tx, 0);
+  assert.equal(view.ty, 0);
+
+  api.setView({ tx: -1000, ty: -1000 });
+  api.atualizaTransform();
+  view = api.getView();
+  assert.equal(view.tx, -300);
+  assert.equal(view.ty, -100);
+  assert.ok(elements.get("world").style.transform.includes("scale(2)"));
 });
