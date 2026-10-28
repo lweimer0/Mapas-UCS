@@ -80,9 +80,10 @@
     </label>
     <label class="voice-setting" for="voice-select">Voz em português</label>
     <select id="voice-select" class="voice-select" aria-label="Escolher voz do guia">
-      <option value="auto">Automática (português, se disponível)</option>
+      <option value="feminina">Feminina pt-BR</option>
+      <option value="masculina">Masculina pt-BR</option>
     </select>
-    <p class="voice-hint">As vozes disponíveis dependem do navegador e das vozes instaladas no aparelho.</p>
+    <p class="voice-hint">Usamos uma voz pt-BR feminina ou masculina quando disponível. Se não estiver disponível, tentamos a fala sintetizada padrão do navegador. O guia precisa de suporte a fala no navegador.</p>
     <label class="voice-setting" for="voice-rate">Velocidade da fala: <span id="voice-rate-value">0,95×</span></label>
     <input id="voice-rate" class="voice-rate" type="range" min="0.75" max="1.25" step="0.05" value="0.95" aria-label="Velocidade da fala">
 

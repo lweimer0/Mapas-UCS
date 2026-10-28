@@ -4,7 +4,7 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-function loadNavigation(voices = []) {
+function loadNavigation(voices = [], speechSupported = true) {
   const spoken = [];
   const alerts = [];
   let cancelCalls = 0;
@@ -26,7 +26,7 @@ function loadNavigation(voices = []) {
     style: { setProperty() {} },
     getBoundingClientRect() { return { width: 100, height: 100, left: 0, top: 0 }; },
     dataset: {},
-    appendChild(child) { if (child.value === "auto") this.value = "auto"; },
+    appendChild(child) { if (child.value) this.value = child.value; },
     setAttribute() {},
     click() {}
   });
@@ -39,7 +39,8 @@ function loadNavigation(voices = []) {
       return elements.get(id);
     }
   };
-  const window = { addEventListener() {}, speechSynthesis };
+  const window = { addEventListener() {} };
+  if (speechSupported) window.speechSynthesis = speechSynthesis;
   class Utterance {
     constructor(text) { this.text = text; }
   }
@@ -73,7 +74,8 @@ function loadNavigation(voices = []) {
       setNavigation(value) { nav = value; },
       atualizaTransform, zoomEm,
       desenharGrafo,
-      dijkstra, rotaNoGrafo, planejarRota, tracarRota, limparCamposRota, escolherVoz, configurarEnunciado,
+      dijkstra, rotaNoGrafo, planejarRota, tracarRota, limparCamposRota, escolherVoz, configurarEnunciado, atualizarListaVozes, ativarGuiaAoEntrar,
+      setVoice(value) { idVozSelecionada = value; $("voice-select").value = value; },
       iniciarTrajeto, cancelarTrajeto, atualizarNavegacao, orientarGiro, pontosDeOrientacao, textoOrientacao, alertasDaRota, falar, falarAlerta,
       getSpeechState() { return { falaAtiva, falaOrientacaoPendente, filaAlertas: filaAlertas.slice() }; }
     };
@@ -82,6 +84,7 @@ function loadNavigation(voices = []) {
   return {
     api: sandbox.navigationTestApi,
     elements,
+    window,
     spoken,
     alerts,
     getCancelCalls: () => cancelCalls,
@@ -250,7 +253,10 @@ test("voice queues hazard alerts without cancelling active guidance", () => {
 });
 
 test("voice resumes browser speech and continues the queue after playback errors", () => {
-  const { api, spoken, elements, getResumeCalls } = loadNavigation();
+  const { api, spoken, elements, getResumeCalls } = loadNavigation([
+    { voiceURI: "pt-br-maria", name: "Maria", lang: "pt-BR" }
+  ]);
+  api.setVoice("feminina");
   api.falar("Siga em frente por 20 metros.");
   api.falarAlerta("Atenção: travessia à frente.", "crossing-1");
 
@@ -265,23 +271,25 @@ test("voice resumes browser speech and continues the queue after playback errors
   assert.equal(api.getSpeechState().falaAtiva, false);
 });
 
-test("automatic voice prefers Brazilian Portuguese, then Portuguese, then browser default", () => {
+test("voice selection only matches the requested gender among Brazilian Portuguese voices", () => {
   const { api } = loadNavigation();
   const voices = [
     { voiceURI: "en", lang: "en-US", default: true },
-    { voiceURI: "pt-pt", lang: "pt-PT", default: false },
-    { voiceURI: "pt-br", lang: "pt-BR", default: false }
+    { voiceURI: "pt-pt-maria", name: "Maria", lang: "pt-PT", default: false },
+    { voiceURI: "pt-br-maria", name: "Maria", lang: "pt-BR", default: false },
+    { voiceURI: "pt-br-daniel", name: "Daniel", lang: "pt-BR", default: false }
   ];
-  assert.equal(api.escolherVoz(voices).voiceURI, "pt-br");
-  assert.equal(api.escolherVoz(voices.slice(0, 2)).voiceURI, "pt-pt");
-  assert.equal(api.escolherVoz(voices.slice(0, 1)).voiceURI, "en");
-  assert.equal(api.escolherVoz(voices, "pt-pt").voiceURI, "pt-pt");
-  assert.equal(api.escolherVoz(voices, "unavailable").voiceURI, "pt-br");
+  assert.equal(api.escolherVoz(voices, "feminina").voiceURI, "pt-br-maria");
+  assert.equal(api.escolherVoz(voices, "masculina").voiceURI, "pt-br-daniel");
+  assert.equal(api.escolherVoz(voices.slice(0, 2), "feminina"), null);
+  assert.equal(api.escolherVoz(voices, "auto"), null);
 });
 
 test("voice settings apply selected native voice and bounded speaking rate", () => {
-  const voice = { voiceURI: "pt-br", lang: "pt-BR" };
+  const voice = { voiceURI: "pt-br-maria", name: "Maria", lang: "pt-BR" };
   const { api, spoken } = loadNavigation([voice]);
+  api.setVoice("feminina");
+  api.atualizarListaVozes();
   api.element("voice-rate").value = "1.25";
   api.configurarEnunciado(spoken);
   assert.equal(spoken.lang, "pt-BR");
@@ -290,6 +298,63 @@ test("voice settings apply selected native voice and bounded speaking rate", () 
   api.element("voice-rate").value = "0.5";
   api.configurarEnunciado(spoken);
   assert.equal(spoken.rate, 0.75);
+});
+
+test("late-loaded voices preserve the requested gender selection", () => {
+  const voices = [];
+  const { api, elements, window } = loadNavigation(voices);
+  api.setVoice("masculina");
+  voices.push({ voiceURI: "pt-br-daniel", name: "Daniel", lang: "pt-BR" });
+
+  window.speechSynthesis.onvoiceschanged();
+  const utterance = {};
+  api.configurarEnunciado(utterance);
+
+  assert.equal(elements.get("voice-select").value, "masculina");
+  assert.equal(utterance.voice.voiceURI, "pt-br-daniel");
+});
+
+test("missing selected voice falls back to browser synthesis with pt-BR settings", () => {
+  const { api, spoken, elements } = loadNavigation([{ voiceURI: "pt-br-generic", name: "Português Brasil", lang: "pt-BR" }]);
+  api.setVoice("masculina");
+  api.element("voice-rate").value = "1.2";
+  api.configurarEnunciado(spoken);
+  assert.equal(spoken.voice, null);
+  assert.equal(spoken.lang, "pt-BR");
+  assert.equal(spoken.rate, 1.2);
+  assert.equal(spoken.pitch, 0.8);
+  assert.match(elements.get("user-status").textContent, /usando fala sintetizada padrão/);
+});
+
+test("voice screen activation speaks and enables the guide with the selected gender", () => {
+  const female = { voiceURI: "pt-br-maria", name: "Maria", lang: "pt-BR" };
+  const male = { voiceURI: "pt-br-daniel", name: "Daniel", lang: "pt-BR" };
+  const { api, spoken, elements } = loadNavigation([female, male]);
+  elements.get("toggle-guia-voz").checked = false;
+  elements.get("voice-select").value = "masculina";
+
+  api.ativarGuiaAoEntrar();
+
+  assert.equal(elements.get("toggle-guia-voz").checked, true);
+  assert.equal(spoken.length, 1);
+  assert.match(spoken[0].text, /Guia por voz ativo/);
+  assert.equal(spoken[0].voice, male);
+});
+
+test("unsupported speech synthesis reports an accessible error instead of silent success", () => {
+  const { api, elements } = loadNavigation([], false);
+  api.falar("Siga em frente.");
+  assert.match(elements.get("user-status").textContent, /indisponível neste navegador/);
+  assert.equal(api.getSpeechState().falaAtiva, false);
+});
+
+test("voice controls offer only female and male Brazilian Portuguese options", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const voiceSelector = html.match(/<select id="voice-select"[\s\S]*?<\/select>/)[0];
+  assert.match(voiceSelector, /value="feminina">Feminina pt-BR/);
+  assert.match(voiceSelector, /value="masculina">Masculina pt-BR/);
+  assert.equal((voiceSelector.match(/<option\b/g) || []).length, 2);
+  assert.doesNotMatch(voiceSelector, /auto|voiceURI|pt-PT/i);
 });
 
 test("public map hides the full editable graph and exposes no path editor controls", () => {

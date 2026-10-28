@@ -63,7 +63,8 @@ let enunciadoAtivo = null;
 let falaOrientacaoPendente = "";
 let filaAlertas = [];
 let vozesDisponiveis = [];
-let idVozSelecionada = "auto";
+let idVozSelecionada = "feminina";
+let avisoFallbackVoz = "";
 
 let db = null, tmModel = null;
 
@@ -86,36 +87,20 @@ function direcao(a, b) {
   return { ang };
 }
 
-function escolherVoz(voices, preferredId = "auto") {
-  const vozPreferida = preferredId !== "auto"
-    ? voices.find(voice => voice.voiceURI === preferredId)
-    : null;
-  if (vozPreferida) return vozPreferida;
-  return voices.find(voice => /^pt-BR$/i.test(voice.lang))
-    || voices.find(voice => /^pt(?:-|$)/i.test(voice.lang))
-    || voices.find(voice => voice.default)
-    || null;
+function escolherVoz(voices, preferredId = "feminina") {
+  if (preferredId !== "feminina" && preferredId !== "masculina") return null;
+  const padraoGenero = preferredId === "masculina"
+    ? /\b(male|man|masculino|daniel|antonio|antônio|ricardo|felipe|joao|joão|paulo|marcos|gustavo|bruno|rafael|pedro|eduardo|carlos|thiago|tiago)\b/i
+    : /\b(female|woman|feminina|maria|luciana|francisca|camila|heloisa|heloísa|vitoria|vitória|bruna|fernanda|ana|joana|isabela|isabella|bianca|carolina)\b/i;
+  return voices.find(voice => /^pt-BR$/i.test(voice.lang) && padraoGenero.test(`${voice.name} ${voice.voiceURI}`)) || null;
 }
 
 function atualizarListaVozes() {
   if (!("speechSynthesis" in window) || typeof window.speechSynthesis.getVoices !== "function") return;
-  vozesDisponiveis = window.speechSynthesis.getVoices().filter(voice => /^pt(?:-|$)/i.test(voice.lang));
+  vozesDisponiveis = window.speechSynthesis.getVoices().filter(voice => /^pt-BR$/i.test(voice.lang));
   const select = $("voice-select");
   if (!select) return;
-  const atual = select.value || idVozSelecionada;
-  select.innerHTML = "";
-  const automatica = document.createElement("option");
-  automatica.value = "auto";
-  automatica.textContent = "Automática (português, se disponível)";
-  select.appendChild(automatica);
-  vozesDisponiveis.forEach(voice => {
-    const option = document.createElement("option");
-    option.value = voice.voiceURI;
-    option.textContent = `${voice.name} (${voice.lang})`;
-    select.appendChild(option);
-  });
-  select.value = vozesDisponiveis.some(voice => voice.voiceURI === atual) ? atual : "auto";
-  idVozSelecionada = select.value;
+  select.value = idVozSelecionada;
 }
 
 function configurarEnunciado(utterance) {
@@ -123,6 +108,16 @@ function configurarEnunciado(utterance) {
   utterance.voice = escolherVoz(vozesDisponiveis, idVozSelecionada);
   const taxa = Number($("voice-rate").value);
   utterance.rate = Number.isFinite(taxa) ? Math.min(1.25, Math.max(0.75, taxa)) : 0.95;
+  if (utterance.voice) {
+    avisoFallbackVoz = "";
+    utterance.pitch = 1;
+  } else {
+    utterance.pitch = idVozSelecionada === "masculina" ? 0.8 : 1.15;
+    if (avisoFallbackVoz !== idVozSelecionada) {
+      status(`voz ${idVozSelecionada} pt-BR indisponível; usando fala sintetizada padrão do navegador`);
+      avisoFallbackVoz = idVozSelecionada;
+    }
+  }
 }
 
 function desbloquearSinteseDeVoz() {
@@ -165,13 +160,21 @@ function processarFilaDeFala() {
 }
 
 function falar(texto) {
-  if (!$("toggle-guia-voz").checked || !("speechSynthesis" in window)) return;
+  if (!$("toggle-guia-voz").checked) return;
+  if (!("speechSynthesis" in window)) {
+    status("guia por voz indisponível neste navegador");
+    return;
+  }
   falaOrientacaoPendente = texto;
   processarFilaDeFala();
 }
 
 function falarAlerta(texto, id) {
-  if (!$("toggle-guia-voz").checked || !("speechSynthesis" in window)) return;
+  if (!$("toggle-guia-voz").checked) return;
+  if (!("speechSynthesis" in window)) {
+    status("guia por voz indisponível neste navegador");
+    return;
+  }
   if (filaAlertas.some(alerta => alerta.id === id)) return;
   filaAlertas.push({ id, texto });
   processarFilaDeFala();
@@ -252,7 +255,25 @@ function status(t) { $("user-status").textContent = t; }
 
 /* ---------- 4) TELAS ---------- */
 
-document.querySelectorAll(".tab-btn").forEach(b => b.addEventListener("click", () => mostrarTela(b.dataset.screen)));
+document.querySelectorAll(".tab-btn").forEach(b => b.addEventListener("click", () => {
+  mostrarTela(b.dataset.screen);
+  if (b.dataset.screen === "rota") ativarGuiaAoEntrar();
+}));
+
+function ativarGuiaAoEntrar() {
+  $("toggle-guia-voz").checked = true;
+  idVozSelecionada = $("voice-select").value || idVozSelecionada;
+  desbloquearSinteseDeVoz();
+  atualizarListaVozes();
+  if (nav && posUsuario) {
+    nav.ultimaFala = 0;
+    atualizarNavegacao();
+  } else if (nav) {
+    falar("Guia por voz ativo. Aguardando sua localização para iniciar as orientações.");
+  } else {
+    falar("Guia por voz ativo. Escolha um destino e inicie um trajeto para receber orientações.");
+  }
+}
 
 function mostrarTela(nome) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
@@ -562,6 +583,9 @@ function tracarRota() {
 
 function iniciarTrajeto() {
   if (!rotaAtual) return;
+  $("toggle-guia-voz").checked = true;
+  idVozSelecionada = $("voice-select").value || idVozSelecionada;
+  atualizarListaVozes();
   desbloquearSinteseDeVoz();
   const rota = pontosDeOrientacao(rotaAtual.pts);
   const alertas = alertasDaRota(rotaAtual.pts);
@@ -683,7 +707,10 @@ $("btn-simular").addEventListener("click", () => {
 
 $("btn-buscar-rota").addEventListener("click", tracarRota);
 $("btn-cancelar-trajeto").addEventListener("click", cancelarTrajeto);
-$("voice-select").addEventListener("change", () => { idVozSelecionada = $("voice-select").value || "auto"; });
+$("voice-select").addEventListener("change", () => {
+  idVozSelecionada = $("voice-select").value || "feminina";
+  avisoFallbackVoz = "";
+});
 $("voice-rate").addEventListener("input", () => {
   $("voice-rate-value").textContent = `${Number($("voice-rate").value).toFixed(2).replace(".", ",")}×`;
 });
@@ -692,6 +719,7 @@ $("toggle-guia-voz").addEventListener("change", () => {
   else {
     desbloquearSinteseDeVoz();
     if (nav && posUsuario) { nav.ultimaFala = 0; atualizarNavegacao(); }
+    else falar("Guia por voz ativado.");
   }
 });
 
