@@ -27,7 +27,7 @@ const OBRAS_DE_ARTE = [
 
 const VELOCIDADE_A_PE = 1.3;     // m/s (~78 m/min)
 const RAIO_CHEGADA = 10;         // metros para considerar que chegou num ponto
-const STORAGE_GRAFO = "trilhas_grafo_v1";
+const STORAGE_GRAFO = "trilhas_grafo_v2";
 
 /* ---------- 2) ESTADO ---------- */
 
@@ -40,7 +40,7 @@ let view = { s: 1, tx: 0, ty: 0 };
 const pointers = new Map();
 
 // grafo de caminhos desenhado pelo grupo
-let grafo = { nos: [], arestas: [], seq: 1 };   // nos: {id,x,y,loc?}  arestas: [idA,idB]
+let grafo = { nos: [], arestas: [], seq: 1, versao: null };   // nos: {id,x,y,loc?}  arestas: [idA,idB,tipo]
 let editorLigado = false;
 let noSelecionado = null;
 
@@ -254,22 +254,40 @@ function mostrarSheetLocal(l) {
   ]);
 }
 
-/* ---------- 7) GRAFO DE CAMINHOS (editor) ---------- */
+/* ---------- 7) GRAFO DE CAMINHOS (caminhos.json) ---------- */
+
+// cor de cada tipo de trecho (editor e rota)
+const COR_TIPO = { externo: "#ff2fd0", travessia: "#e63946", interno: "#16c7e6", atencao: "#e9c46a",
+                   passarela: "#ff8c1a", ligacao: "#2dd36f", acesso: "#ffffff" };
+// custo = comprimento × multiplicador + extra (metros). Faz a rota preferir calçada e poucas travessias.
+const CUSTO = { externo: [1, 0], travessia: [1, 6], interno: [1, 0], atencao: [1.25, 0],
+                passarela: [1, 0], ligacao: [1, 3], acesso: [1, 0] };
+
+let mapaNos = new Map();
+let nosChao = [];
+
+function reindex() {
+  mapaNos = new Map(grafo.nos.map(n => [n.id, n]));
+  const soPassarela = new Set(), temChao = new Set();
+  grafo.arestas.forEach(([a, b, t]) => {
+    (t === "passarela" ? soPassarela : temChao).add(a);
+    (t === "passarela" ? soPassarela : temChao).add(b);
+  });
+  nosChao = grafo.nos.filter(n => temChao.has(n.id) && !String(n.id).startsWith("L"));
+}
+const noPorId = (id) => mapaNos.get(id);
 
 function salvarGrafo() { try { localStorage.setItem(STORAGE_GRAFO, JSON.stringify(grafo)); } catch (e) {} }
 
 async function carregarGrafo() {
-  try {
-    const salvo = localStorage.getItem(STORAGE_GRAFO);
-    if (salvo) { grafo = JSON.parse(salvo); return; }
-  } catch (e) {}
-  try {                                   // caminhos.json publicado junto com o site
-    const r = await fetch("caminhos.json", { cache: "no-store" });
-    if (r.ok) grafo = await r.json();
-  } catch (e) {}
+  let arquivo = null, local = null;
+  try { const r = await fetch("caminhos.json", { cache: "no-store" }); if (r.ok) arquivo = await r.json(); } catch (e) {}
+  try { const s = localStorage.getItem(STORAGE_GRAFO); if (s) local = JSON.parse(s); } catch (e) {}
+  // um caminhos.json novo publicado vence o rascunho antigo guardado no aparelho
+  if (arquivo && (!local || local.versao !== arquivo.versao)) grafo = arquivo;
+  else if (local) grafo = local;
+  reindex();
 }
-
-const noPorId = (id) => grafo.nos.find(n => n.id === id);
 
 function desenharGrafo() {
   const svg = $("overlay");
@@ -278,19 +296,23 @@ function desenharGrafo() {
   svg.setAttribute("width", b.largura); svg.setAttribute("height", b.altura);
   let h = "";
   if (editorLigado) {
-    grafo.arestas.forEach(([a, c]) => {
+    grafo.arestas.forEach(([a, c, t]) => {
       const A = noPorId(a), C = noPorId(c); if (!A || !C) return;
-      h += `<line x1="${A.x}" y1="${A.y}" x2="${C.x}" y2="${C.y}" stroke="#e63946" stroke-width="${3 / view.s}" stroke-linecap="round"/>`;
+      h += `<line x1="${A.x}" y1="${A.y}" x2="${C.x}" y2="${C.y}" stroke="${COR_TIPO[t] || "#ff2fd0"}" stroke-width="${2.5 / view.s}" stroke-linecap="round"/>`;
     });
     grafo.nos.forEach(n => {
       const sel = n.id === noSelecionado;
-      h += `<circle cx="${n.x}" cy="${n.y}" r="${(sel ? 8 : 5) / view.s}" fill="${sel ? "#e9c46a" : "#fff"}" stroke="#e63946" stroke-width="${2 / view.s}"/>`;
+      if (!sel && view.s < 0.5) return;
+      h += `<circle cx="${n.x}" cy="${n.y}" r="${(sel ? 8 : 3.5) / view.s}" fill="${sel ? "#e9c46a" : "#fff"}" stroke="#333" stroke-width="${1.5 / view.s}"/>`;
     });
   }
   if (rotaAtual) {
-    const pts = rotaAtual.pts.map(p => `${p.x},${p.y}`).join(" ");
-    h += `<polyline points="${pts}" fill="none" stroke="#fff" stroke-width="${9 / view.s}" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>`;
-    h += `<polyline points="${pts}" fill="none" stroke="#2a6f97" stroke-width="${5 / view.s}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${12 / view.s} ${9 / view.s}"/>`;
+    const todos = rotaAtual.pts.map(p => `${p.x},${p.y}`).join(" ");
+    h += `<polyline points="${todos}" fill="none" stroke="#fff" stroke-width="${10 / view.s}" stroke-linecap="round" stroke-linejoin="round" opacity=".92"/>`;
+    rotaAtual.segs.forEach(s => {
+      const cor = s.tipo === "externo" || s.tipo === "acesso" ? "#2a6f97" : (COR_TIPO[s.tipo] || "#2a6f97");
+      h += `<polyline points="${s.pts.map(p => `${p.x},${p.y}`).join(" ")}" fill="none" stroke="${cor}" stroke-width="${5.5 / view.s}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${12 / view.s} ${8 / view.s}"/>`;
+    });
   }
   svg.innerHTML = h;
 }
@@ -311,7 +333,7 @@ function noPerto(p, raioPx) {
 function ligar(a, b) {
   if (!a || !b || a === b) return;
   const existe = grafo.arestas.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
-  if (!existe) grafo.arestas.push([a, b]);
+  if (!existe) grafo.arestas.push([a, b, $("ed-tipo").value]);
 }
 
 function aoTocarMapa(cx, cy) {
@@ -322,7 +344,7 @@ function aoTocarMapa(cx, cy) {
     let no = noPerto(p, alcance);
     if (!no) {
       const l = localMaisProximo(p, alcance);
-      if (l) {                                         // usa o bloco como ponto do grafo
+      if (l) {
         no = grafo.nos.find(n => n.loc === l.id);
         if (!no) { no = { id: "L" + l.id, x: l.x, y: l.y, loc: l.id }; grafo.nos.push(no); }
       } else {
@@ -332,6 +354,7 @@ function aoTocarMapa(cx, cy) {
     }
     if (noSelecionado && noSelecionado !== no.id) ligar(noSelecionado, no.id);
     noSelecionado = no.id;
+    grafo.versao = grafo.versao || "local"; reindex();
     salvarGrafo(); atualizaContador(); desenharGrafo();
     return;
   }
@@ -352,25 +375,25 @@ function iniciarEditor() {
     if (!noSelecionado) return alert("Toque num ponto para selecioná-lo antes de apagar.");
     grafo.nos = grafo.nos.filter(n => n.id !== noSelecionado);
     grafo.arestas = grafo.arestas.filter(([a, b]) => a !== noSelecionado && b !== noSelecionado);
-    noSelecionado = null; salvarGrafo(); atualizaContador(); desenharGrafo();
+    noSelecionado = null; reindex(); salvarGrafo(); atualizaContador(); desenharGrafo();
   });
   $("ed-limpar").addEventListener("click", () => {
-    if (!confirm("Apagar TODOS os caminhos desenhados neste aparelho?")) return;
-    grafo = { nos: [], arestas: [], seq: 1 }; noSelecionado = null;
-    salvarGrafo(); atualizaContador(); desenharGrafo();
+    if (!confirm("Apagar TODOS os caminhos neste aparelho?")) return;
+    grafo = { nos: [], arestas: [], seq: 1, versao: "local" }; noSelecionado = null;
+    reindex(); salvarGrafo(); atualizaContador(); desenharGrafo();
   });
   $("ed-exportar").addEventListener("click", () => {
+    grafo.versao = "editado-" + Date.now(); salvarGrafo();
     const txt = JSON.stringify(grafo);
-    if (navigator.clipboard) navigator.clipboard.writeText(txt).catch(() => {});
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([txt], { type: "application/json" }));
     a.download = "caminhos.json"; a.click();
-    alert("Arquivo caminhos.json baixado (e copiado). Suba ele para o repositório, na mesma pasta do index.html, para todos verem os caminhos.");
+    alert("Arquivo caminhos.json baixado. Suba ele para o repositório (substituindo o antigo) para todos verem os caminhos.");
   });
   $("ed-importar").addEventListener("click", () => $("ed-arquivo").click());
   $("ed-arquivo").addEventListener("change", async (e) => {
     const f = e.target.files[0]; if (!f) return;
-    try { grafo = JSON.parse(await f.text()); salvarGrafo(); atualizaContador(); desenharGrafo(); }
+    try { grafo = JSON.parse(await f.text()); reindex(); salvarGrafo(); atualizaContador(); desenharGrafo(); }
     catch (err) { alert("Arquivo inválido."); }
   });
 }
@@ -379,62 +402,165 @@ function iniciarEditor() {
 
 function noMaisProximoDe(p) {
   let m = null, d0 = Infinity;
-  grafo.nos.forEach(n => { const d = Math.hypot(n.x - p.x, n.y - p.y); if (d < d0) { d0 = d; m = n; } });
+  nosChao.forEach(n => { const d = Math.hypot(n.x - p.x, n.y - p.y); if (d < d0) { d0 = d; m = n; } });
   return m;
+}
+function noDoLocal(l) {
+  return mapaNos.has("L" + l.id) ? "L" + l.id : (noMaisProximoDe({ x: l.x, y: l.y }) || {}).id;
 }
 
 function dijkstra(origemId, destinoId) {
-  const adj = {};
-  grafo.nos.forEach(n => adj[n.id] = []);
-  grafo.arestas.forEach(([a, b]) => {
+  const adj = new Map(grafo.nos.map(n => [n.id, []]));
+  grafo.arestas.forEach(([a, b, t]) => {
     const A = noPorId(a), B = noPorId(b); if (!A || !B) return;
-    const d = dist(A, B); adj[a].push([b, d]); adj[b].push([a, d]);
+    const [mult, extra] = CUSTO[t] || [1, 0];
+    const w = dist(A, B) * mult + extra;
+    adj.get(a).push([b, w, t || "externo"]); adj.get(b).push([a, w, t || "externo"]);
   });
-  const D = {}, prev = {}, nv = new Set(grafo.nos.map(n => n.id));
-  nv.forEach(i => D[i] = Infinity); D[origemId] = 0;
+  if (!adj.has(origemId) || !adj.has(destinoId)) return null;
+  const D = new Map(), prev = new Map(), nv = new Set(adj.keys());
+  nv.forEach(i => D.set(i, Infinity)); D.set(origemId, 0);
   while (nv.size) {
-    let u = null; nv.forEach(i => { if (u === null || D[i] < D[u]) u = i; });
-    if (D[u] === Infinity) break;
+    let u = null, du = Infinity;
+    nv.forEach(i => { const d = D.get(i); if (d < du) { du = d; u = i; } });
+    if (u === null) break;
     nv.delete(u); if (u === destinoId) break;
-    adj[u].forEach(([v, w]) => { if (D[u] + w < D[v]) { D[v] = D[u] + w; prev[v] = u; } });
+    adj.get(u).forEach(([v, w, t]) => { if (du + w < D.get(v)) { D.set(v, du + w); prev.set(v, [u, t]); } });
   }
-  if (D[destinoId] === Infinity) return null;
-  const caminho = []; for (let c = destinoId; c; c = prev[c]) caminho.unshift(c);
-  return caminho.map(noPorId);
+  if (D.get(destinoId) === Infinity) return null;
+  const ids = [destinoId], tipos = [];
+  for (let c = destinoId; prev.has(c);) { const [p, t] = prev.get(c); ids.unshift(p); tipos.unshift(t); c = p; }
+  return { nos: ids.map(noPorId), tipos };
 }
 
 function comprimento(pts) { let s = 0; for (let i = 1; i < pts.length; i++) s += dist(pts[i - 1], pts[i]); return s; }
+
+/* --- instruções (guia por voz) a partir da rota --- */
+const angDe = (a, b) => (Math.atan2(b.x - a.x, -(b.y - a.y)) * 180 / Math.PI + 360) % 360;
+
+function pontoA(pts, i, sentido, metros) {          // ponto ~"metros" antes/depois do índice i
+  let acum = 0, j = i;
+  while (j + sentido >= 0 && j + sentido < pts.length && acum < metros) {
+    acum += dist(pts[j], pts[j + sentido]); j += sentido;
+  }
+  return pts[j];
+}
+
+function textoVia(t) {
+  return { passarela: "pela passarela", interno: "pelo corredor interno", travessia: "atravessando a rua",
+           atencao: "com atenção", ligacao: "pelo acesso" }[t] || "";
+}
+
+function textoAcao(t0, t1, delta, destino) {
+  if (t1 === "travessia") return "atravesse a rua";
+  if (t1 === "passarela") return "entre na passarela";
+  if (t1 === "interno") return "entre pelo corredor interno";
+  if (t1 === "atencao") return "siga com atenção";
+  if (t1 === "ligacao") return "use o acesso (escada ou rampa) da passarela";
+  if (t1 === "acesso") return `siga até a entrada de ${destino}`;
+  if (t0 === "passarela") return "saia da passarela";
+  if (t0 === "interno") return "saia do corredor interno";
+  if (t0 === "travessia") return "continue pela calçada";
+  return textoCurva(delta);
+}
+
+function textoCurva(delta) {
+  const a = Math.abs(delta);
+  const lado = delta > 0 ? "direita" : "esquerda";
+  if (a > 140) return "faça o retorno";
+  if (a > 75) return `vire à ${lado}`;
+  return `vire levemente à ${lado}`;
+}
+
+function montarGuia(pts, tipos, destino) {
+  const marcas = [0]; let ultimo = 0, desdeUltima = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    desdeUltima += dist(pts[i - 1], pts[i]);
+    const a1 = angDe(pontoA(pts, i, -1, 12), pts[i]), a2 = angDe(pts[i], pontoA(pts, i, 1, 12));
+    const delta = ((a2 - a1 + 540) % 360) - 180;
+    const mudaTipo = tipos[i - 1] !== tipos[i] && tipos[i - 1] !== "acesso";
+    if ((Math.abs(delta) >= 40 && desdeUltima >= 15) || (mudaTipo && desdeUltima >= 4) || desdeUltima >= 90) {
+      marcas.push(i); desdeUltima = 0;
+    }
+  }
+  marcas.push(pts.length - 1);
+  const guia = [];
+  marcas.forEach((i, k) => {
+    const p = pts[i];
+    if (k === 0) { guia.push({ x: p.x, y: p.y, acao: "início", via: "" }); return; }
+    const t0 = tipos[i - 1], t1 = tipos[i];
+    if (i === pts.length - 1) { guia.push({ x: p.x, y: p.y, acao: `chegada em ${destino}`, via: textoVia(tipos[marcas[k - 1]]) }); return; }
+    const a1 = angDe(pontoA(pts, i, -1, 12), pts[i]), a2 = angDe(pts[i], pontoA(pts, i, 1, 12));
+    const delta = ((a2 - a1 + 540) % 360) - 180;
+    const trocou = t0 !== t1 && t0 !== "acesso";
+    guia.push({ x: p.x, y: p.y, acao: trocou ? textoAcao(t0, t1, delta, destino) : (Math.abs(delta) >= 40 ? textoCurva(delta) : "siga em frente"),
+                via: textoVia(tipos[marcas[k - 1]]) });
+  });
+  return guia;
+}
+
+// descarta "pedaços" minúsculos de tipo diferente (ex.: ponta de uma faixa de pedestres) que só gerariam avisos falsos
+function suavizarTipos(pts, tipos) {
+  const MIN = { travessia: 6, atencao: 12, interno: 6 };
+  const t = tipos.slice();
+  let i = 0;
+  while (i < t.length) {
+    let j = i, m = 0;
+    while (j < t.length && t[j] === t[i]) { m += dist(pts[j], pts[j + 1]); j++; }
+    if (m < (MIN[t[i]] || 0) && i > 0 && j < t.length) for (let k = i; k < j; k++) t[k] = t[i - 1];
+    i = j;
+  }
+  return t;
+}
+
+function agruparSegmentos(pts, tipos) {
+  const segs = []; let cur = null;
+  tipos.forEach((t, i) => {
+    if (!cur || cur.tipo !== t) { cur = { tipo: t, pts: [pts[i]] }; segs.push(cur); }
+    cur.pts.push(pts[i + 1]);
+  });
+  return segs;
+}
 
 function tracarRota() {
   const dest = acharLocalPorNome($("destino-input").value);
   if (!dest) return alert("Escolha um destino da lista (comece a digitar o nome do bloco).");
 
-  let origemPt, origemNome;
+  let origemPt, origemId, doGPS = false;
   const txtOrigem = $("origem-input").value.trim();
   if (txtOrigem) {
     const o = acharLocalPorNome(txtOrigem);
     if (!o) return alert("Origem não encontrada. Deixe vazio para usar sua localização.");
-    origemPt = { x: o.x, y: o.y }; origemNome = o.nome;
-  } else if (posUsuario) { origemPt = posUsuario; origemNome = "sua localização"; }
-  else return alert("Sem localização do GPS ainda. Escolha uma origem na lista (campo \"De:\").");
+    origemPt = { x: o.x, y: o.y }; origemId = noDoLocal(o);
+  } else if (posUsuario) {
+    origemPt = posUsuario; doGPS = true; origemId = (noMaisProximoDe(posUsuario) || {}).id;
+  } else return alert("Sem localização do GPS ainda. Escolha uma origem na lista (campo \"De:\").");
 
   const destPt = { x: dest.x, y: dest.y };
-  let pts = null, reta = false;
+  let pts, tipos, reta = false;
+  const r = grafo.nos.length >= 2 && origemId ? dijkstra(origemId, noDoLocal(dest)) : null;
+  if (r) {
+    pts = r.nos.map(n => ({ x: n.x, y: n.y })); tipos = r.tipos.slice();
+    if (doGPS) { pts.unshift(origemPt); tipos.unshift("acesso"); }
+  } else { pts = [origemPt, destPt]; tipos = ["externo"]; reta = true; }
 
-  if (grafo.nos.length >= 2) {
-    const nA = noMaisProximoDe(origemPt), nB = noMaisProximoDe(destPt);
-    const caminho = nA && nB ? dijkstra(nA.id, nB.id) : null;
-    if (caminho) pts = [origemPt, ...caminho, destPt];
-  }
-  if (!pts) { pts = [origemPt, destPt]; reta = true; }
-
-  rotaAtual = { pts, metros: comprimento(pts), reta, destino: dest.nome };
+  tipos = suavizarTipos(pts, tipos);
+  const segs = agruparSegmentos(pts, tipos);
+  const guia = montarGuia(pts, tipos, dest.nome);
+  rotaAtual = { pts, tipos, segs, guia, metros: comprimento(pts), reta, destino: dest.nome };
   desenharGrafo();
   centralizarEm({ x: (origemPt.x + destPt.x) / 2, y: (origemPt.y + destPt.y) / 2 }, Math.min(view.s, 0.9));
 
   const min = Math.max(1, Math.round(rotaAtual.metros / VELOCIDADE_A_PE / 60));
+  const trav = segs.filter(s => s.tipo === "travessia").length;
+  const extras = [];
+  if (tipos.includes("passarela")) extras.push("passa pela passarela");
+  if (tipos.includes("atencao")) extras.push("trecho de atenção");
+  if (trav) extras.push(`${trav} travessia${trav > 1 ? "s" : ""}`);
+  if (tipos.includes("interno")) extras.push("corredor interno");
   sheet(`${dest.nome}`, `${Math.round(rotaAtual.metros)} m · ${min} min a pé` +
-        (reta ? " · linha reta (desenhem os caminhos no editor ✎)" : ""), [
+        (extras.length ? " · " + extras.join(", ") : "") +
+        (reta ? " · linha reta (sem caminho encontrado)" : ""), [
     { texto: "Iniciar trajeto", fn: iniciarTrajeto },
     { texto: "Cancelar", sec: true, fn: cancelarTrajeto }
   ]);
@@ -444,9 +570,11 @@ function tracarRota() {
 
 function iniciarTrajeto() {
   if (!rotaAtual) return;
-  nav = { pts: rotaAtual.pts.slice(), idx: 1, destino: rotaAtual.destino };
+  nav = { guia: rotaAtual.guia.slice(), full: rotaAtual.pts.slice(), idx: 1, destino: rotaAtual.destino };
   mostrarTela("rota");
-  falar(`Trajeto iniciado até ${nav.destino}. ${Math.round(rotaAtual.metros)} metros.`);
+  const g1 = nav.guia[1];
+  falar(`Trajeto iniciado até ${nav.destino}. ${Math.round(rotaAtual.metros)} metros. ` +
+        (g1 ? `Siga ${g1.via || "em frente"} e depois ${g1.acao}.` : ""));
   if (posUsuario) atualizarNavegacao(); else {
     $("nav-texto").textContent = "Aguardando sua localização… (ou use Simular caminhada)";
   }
@@ -455,6 +583,7 @@ function iniciarTrajeto() {
 function cancelarTrajeto() {
   nav = null; rotaAtual = null; pararSimulacao();
   $("sheet").hidden = true; desenharGrafo();
+  $("nav-seta").textContent = "↑"; $("nav-seta").style.transform = "none";
   $("nav-distancia").textContent = "-- m"; $("nav-restante").textContent = "";
   $("nav-texto").textContent = "Nenhum trajeto ativo. Escolha um destino na aba Mapa.";
   mostrarTela("mapa");
@@ -462,15 +591,18 @@ function cancelarTrajeto() {
 
 function atualizarNavegacao() {
   if (!nav || !posUsuario) return;
-  while (nav.idx < nav.pts.length - 1 && dist(posUsuario, nav.pts[nav.idx]) < RAIO_CHEGADA) {
-    nav.idx++;
-    const prox = nav.pts[nav.idx], d = direcao(posUsuario, prox);
-    falar(`Siga para o ${d.nome} por ${Math.round(dist(posUsuario, prox))} metros.`);
+  const g = nav.guia, ultimo = g.length - 1;
+  while (nav.idx < ultimo && dist(posUsuario, g[nav.idx]) < RAIO_CHEGADA) {
+    const feito = g[nav.idx]; nav.idx++;
+    const prox = g[nav.idx];
+    falar((feito.acao === "siga em frente" ? "" : feito.acao + ". ") +
+          `Siga ${prox.via || "em frente"} por ${Math.round(dist(posUsuario, prox))} metros` +
+          (nav.idx >= ultimo ? `, chegada em ${nav.destino}.` : (prox.acao === "siga em frente" ? "." : `, depois ${prox.acao}.`)));
   }
-  const alvo = nav.pts[nav.idx];
+  const alvo = g[nav.idx];
   const d = dist(posUsuario, alvo);
 
-  if (nav.idx === nav.pts.length - 1 && d < RAIO_CHEGADA) {
+  if (nav.idx === ultimo && d < RAIO_CHEGADA) {
     $("nav-seta").textContent = "✔"; $("nav-seta").style.transform = "none";
     $("nav-distancia").textContent = "Chegou!"; $("nav-texto").textContent = nav.destino;
     $("nav-restante").textContent = "";
@@ -480,8 +612,10 @@ function atualizarNavegacao() {
   const dir = direcao(posUsuario, alvo);
   $("nav-seta").textContent = "↑"; $("nav-seta").style.transform = `rotate(${dir.ang}deg)`;
   $("nav-distancia").textContent = `${Math.round(d)} m`;
-  $("nav-texto").textContent = `Siga para o ${dir.nome}`;
-  let resta = d; for (let i = nav.idx; i < nav.pts.length - 1; i++) resta += dist(nav.pts[i], nav.pts[i + 1]);
+  $("nav-texto").textContent = nav.idx === ultimo
+    ? `Siga ${alvo.via || "em frente"} até ${nav.destino}`
+    : (alvo.acao === "siga em frente" ? `Siga ${alvo.via || "em frente"}` : `Siga ${alvo.via || "em frente"} · depois: ${alvo.acao}`);
+  let resta = d; for (let i = nav.idx; i < ultimo; i++) resta += dist(g[i], g[i + 1]);
   $("nav-restante").textContent = `Faltam ${Math.round(resta)} m até ${nav.destino}`;
 }
 
@@ -518,7 +652,7 @@ function pararSimulacao() {
 $("btn-simular").addEventListener("click", () => {
   if (simTimer) return pararSimulacao();
   if (!nav) return alert("Trace uma rota e toque em \"Iniciar trajeto\" primeiro.");
-  const pts = nav.pts; let seg = 0, t = 0;
+  const pts = nav.full; let seg = 0, t = 0;
   $("btn-simular").textContent = "Parar simulação";
   colocarUsuario({ x: pts[0].x, y: pts[0].y });
   simTimer = setInterval(() => {
