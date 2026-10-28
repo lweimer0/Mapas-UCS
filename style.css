@@ -164,13 +164,37 @@ button {
     position: relative;
     flex: 1;
     min-height: 240px;
-    margin: 44px 38px 22px;
+    margin: 8px 38px 22px;
     overflow: hidden;
     border-radius: 14px;
     background: #d9d6cf;
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
+}
+
+.map-controls {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin: 10px 38px 0;
+}
+
+.map-controls button {
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.35);
+    color: var(--tinta);
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+#pins,
+#me {
+    display: none !important;
 }
 
 .world {
@@ -196,13 +220,6 @@ button {
     pointer-events: none;
     overflow: visible;
 }
-
-.map-controls{position:absolute;right:8px;top:8px;display:flex;flex-direction:column;gap:6px;}
-.map-controls button{
-  width:36px;height:36px;border-radius:10px;border:none;background:#fff;
-  box-shadow:0 1px 4px rgba(0,0,0,.35);font-size:1.1rem;font-weight:700;color:var(--tinta);
-}
-.map-controls button.ativo{background:var(--ouro);}
 
 .bottom-sheet{
   margin:-6px 38px 16px;background:#fff;border-radius:14px;padding:12px 14px;
@@ -278,31 +295,6 @@ button {
     transform: translate(-50%,-50%) scale(var(--inv,1));
     z-index: 6;
 }
-
-.map-controls {
-    position: absolute;
-    right: 8px;
-    top: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-    .map-controls button {
-        width: 36px;
-        height: 36px;
-        border-radius: 10px;
-        border: none;
-        background: #fff;
-        box-shadow: 0 1px 4px rgba(0,0,0,.35);
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: var(--tinta);
-    }
-
-        .map-controls button.ativo {
-            background: var(--ouro);
-        }
 
 .bottom-sheet {
     margin: -6px 38px 16px;

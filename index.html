@@ -42,18 +42,18 @@
     </div>
     <datalist id="lista-locais"></datalist>
 
+    <div class="map-controls" role="group" aria-label="Controles do mapa">
+      <button id="btn-zoom-in" aria-label="Aproximar">+</button>
+      <button id="btn-zoom-out" aria-label="Afastar">−</button>
+      <button id="btn-centralizar" aria-label="Minha posição">◎</button>
+    </div>
+
     <div id="viewport" class="viewport">
       <div id="world" class="world">
         <img id="mapa-img" src="mapa-campus.jpg" alt="Mapa ilustrado do campus da UCS; a rota selecionada aparece sobreposta ao mapa" draggable="false">
         <svg id="overlay" class="overlay"></svg>
-        <div id="pins"></div>
-        <div id="me" class="me" hidden></div>
-      </div>
-
-      <div class="map-controls">
-        <button id="btn-zoom-in" aria-label="Aproximar">+</button>
-        <button id="btn-zoom-out" aria-label="Afastar">−</button>
-        <button id="btn-centralizar" aria-label="Minha posição">◎</button>
+        <div id="pins" aria-hidden="true" hidden></div>
+        <div id="me" class="me" aria-hidden="true" hidden></div>
       </div>
     </div>
 

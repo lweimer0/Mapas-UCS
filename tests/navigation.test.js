@@ -289,3 +289,13 @@ test("map image and route overlay retain the positioning styles needed to render
   assert.match(styles, /\.world img\s*\{[^}]*display:\s*block;[^}]*max-width:\s*none;/s);
   assert.match(styles, /\.overlay\s*\{[^}]*position:\s*absolute;[^}]*pointer-events:\s*none;/s);
 });
+
+test("map viewport shows only the image and active route, with controls outside it", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const styles = fs.readFileSync(path.join(__dirname, "..", "style.css"), "utf8");
+  assert.match(html, /<div class="map-controls"[\s\S]*?<\/div>\s*<div id="viewport"/);
+  assert.match(html, /id="pins"[^>]*aria-hidden="true"[^>]*hidden/);
+  assert.match(html, /id="me"[^>]*aria-hidden="true"[^>]*hidden/);
+  assert.match(styles, /#pins,\s*#me\s*\{\s*display:\s*none !important;/);
+  assert.doesNotMatch(styles, /\.map-controls\s*\{[^}]*position:\s*absolute;/s);
+});
