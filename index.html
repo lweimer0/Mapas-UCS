@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Trilhas UCS</title>
 
     <!-- TensorFlow.js + Teachable Machine (reconhecimento das obras) -->
@@ -35,102 +35,94 @@
         <!-- ===================== MAPA ===================== -->
         <section id="screen-mapa" class="screen active">
 
-            <div class="search-box">
-                <input id="destino-input" list="lista-locais" type="text" placeholder="Para onde você vai?" autocomplete="off">
-                <button id="btn-buscar-rota">Buscar rota</button>
-                <input id="origem-input" class="origem" list="lista-locais" type="text" placeholder="Sem GPS: de onde você parte?" autocomplete="off">
-            </div>
-            <datalist id="lista-locais"></datalist>
+    <div class="search-box">
+      <input id="origem-input" class="origem" list="lista-locais" type="text" placeholder="De onde você vai sair?" aria-label="Origem: de onde você vai sair" autocomplete="off">
+      <input id="destino-input" list="lista-locais" type="text" placeholder="Para onde você vai?" aria-label="Destino: para onde você vai" autocomplete="off">
+      <button id="btn-buscar-rota">Buscar rota</button>
+    </div>
+    <div class="route-preference">
+      <label for="evitar-alternativos">
+        <input id="evitar-alternativos" type="checkbox">
+        Tenho deficiência visual — evitar caminhos alternativos
+      </label>
+      <p>O filtro evita os trechos identificados como alternativos. Alguns destinos só podem ser alcançados por esses trechos; nesse caso o app avisa.</p>
+    </div>
+    <datalist id="lista-locais"></datalist>
 
-            <div id="viewport" class="viewport">
-                <div id="world" class="world">
-                    <img id="mapa-img" src="mapa-campus.jpg" alt="Mapa do campus da UCS" draggable="false">
-                    <svg id="overlay" class="overlay"></svg>
-                    <div id="pins"></div>
-                    <div id="me" class="me" hidden></div>
-                </div>
-
-                <div class="map-controls">
-                    <button id="btn-zoom-in" aria-label="Aproximar">+</button>
-                    <button id="btn-zoom-out" aria-label="Afastar">−</button>
-                    <button id="btn-centralizar" aria-label="Minha posição">◎</button>
-                    <button id="btn-editor" aria-label="Editor de caminhos" title="Editor de caminhos">✎</button>
-                </div>
-            </div>
-
-            <!-- Editor de caminhos (grupo desenha os trajetos a pé) -->
-            <div id="editor-panel" class="editor-panel" hidden>
-                <p class="editor-help">
-                    <strong>Editor de caminhos:</strong> toque no mapa para criar pontos; cada toque liga ao ponto anterior.
-                    Toque num bloco para usá-lo como ponto. <em id="editor-contador"></em>
-                </p>
-                <div class="editor-buttons">
-                    <select id="ed-tipo" aria-label="Tipo do trecho">
-                        <option value="externo">externo</option>
-                        <option value="travessia">travessia</option>
-                        <option value="interno">interno</option>
-                        <option value="passarela">passarela</option>
-                        <option value="atencao">atenção</option>
-                    </select>
-                    <button id="ed-terminar">Terminar traço</button>
-                    <button id="ed-apagar">Apagar ponto</button>
-                    <button id="ed-exportar">Exportar</button>
-                    <button id="ed-importar">Importar</button>
-                    <button id="ed-limpar">Limpar tudo</button>
-                    <input id="ed-arquivo" type="file" accept="application/json" hidden>
-                </div>
-            </div>
-
-            <div id="sheet" class="bottom-sheet" hidden>
-                <p class="sheet-titulo" id="sheet-titulo"></p>
-                <p class="sheet-sub" id="sheet-sub"></p>
-                <div class="sheet-botoes" id="sheet-botoes"></div>
-            </div>
-        </section>
-
-        <!-- ===================== ROTA ===================== -->
-        <section id="screen-rota" class="screen">
-            <div class="nav-instrucao">
-                <div id="nav-seta" class="nav-seta">↑</div>
-                <p id="nav-distancia">-- m</p>
-                <p id="nav-texto">Nenhum trajeto ativo. Escolha um destino na aba Mapa.</p>
-                <p id="nav-restante" class="nav-restante"></p>
-            </div>
-
-            <label class="voice-toggle">
-                <input type="checkbox" id="toggle-guia-voz">
-                Guia por voz ativo
-            </label>
-
-            <button id="btn-simular" class="btn-sec">Simular caminhada (teste em casa)</button>
-            <button id="btn-cancelar-trajeto" class="btn-perigo">Cancelar trajeto</button>
-        </section>
-
-        <!-- ===================== ÁLBUM ===================== -->
-        <section id="screen-album" class="screen">
-            <div class="pilula">Álbum de figurinhas do campus-sede</div>
-            <div id="album-grid" class="album-grid"></div>
-        </section>
-
-        <!-- ===================== SCANNER ===================== -->
-        <section id="screen-scanner" class="screen">
-            <div class="scanner-viewfinder">
-                <video id="scanner-video" autoplay playsinline muted></video>
-                <canvas id="scanner-canvas" hidden></canvas>
-            </div>
-            <button id="btn-escanear">Escanear obra de arte</button>
-            <p id="scanner-resultado"></p>
-        </section>
-
-        <nav class="tab-bar">
-            <button class="tab-btn active" data-screen="mapa">Mapa</button>
-            <button class="tab-btn" data-screen="rota">Rota</button>
-            <button class="tab-btn" data-screen="album">Álbum</button>
-            <button class="tab-btn" data-screen="scanner">Scanner</button>
-        </nav>
-
+    <div class="map-controls" role="group" aria-label="Controles do mapa">
+      <button id="btn-zoom-in" aria-label="Aproximar">+</button>
+      <button id="btn-zoom-out" aria-label="Afastar">−</button>
+      <button id="btn-centralizar" aria-label="Minha posição">◎</button>
     </div>
 
-    <script src="app.js"></script>
+    <div id="viewport" class="viewport">
+      <div id="world" class="world">
+        <img id="mapa-img" src="mapa-campus.jpg" alt="Mapa ilustrado do campus da UCS; a rota selecionada aparece sobreposta ao mapa" draggable="false">
+        <svg id="overlay" class="overlay"></svg>
+        <div id="pins" aria-hidden="true" hidden></div>
+        <div id="me" class="me" aria-hidden="true" hidden></div>
+      </div>
+    </div>
+
+    <div id="sheet" class="bottom-sheet" hidden>
+      <p class="sheet-titulo" id="sheet-titulo"></p>
+      <p class="sheet-sub" id="sheet-sub"></p>
+      <div class="sheet-botoes" id="sheet-botoes"></div>
+    </div>
+  </section>
+
+  <!-- ===================== ROTA ===================== -->
+  <section id="screen-rota" class="screen">
+    <div class="nav-instrucao">
+      <div id="nav-seta" class="nav-seta">↑</div>
+      <p id="nav-distancia">-- m</p>
+      <p id="nav-texto">Nenhum trajeto ativo. Escolha um destino na aba Mapa.</p>
+      <p id="nav-alerta" class="nav-alerta" role="alert" aria-live="assertive"></p>
+      <p id="nav-restante" class="nav-restante"></p>
+    </div>
+
+    <label class="voice-toggle">
+      <input type="checkbox" id="toggle-guia-voz" checked>
+      Guia por voz ativo
+    </label>
+    <label class="voice-setting" for="voice-select">Voz em português</label>
+    <select id="voice-select" class="voice-select" aria-label="Escolher voz do guia">
+      <option value="feminina">Feminina pt-BR</option>
+      <option value="masculina">Masculina pt-BR</option>
+    </select>
+    <p class="voice-hint">Usamos uma voz pt-BR feminina ou masculina quando disponível. Se não estiver disponível, tentamos a fala sintetizada padrão do navegador. O guia precisa de suporte a fala no navegador.</p>
+    <label class="voice-setting" for="voice-rate">Velocidade da fala: <span id="voice-rate-value">0,95×</span></label>
+    <input id="voice-rate" class="voice-rate" type="range" min="0.75" max="1.25" step="0.05" value="0.95" aria-label="Velocidade da fala">
+
+    <button id="btn-simular" class="btn-sec">Simular caminhada (teste em casa)</button>
+    <button id="btn-cancelar-trajeto" class="btn-perigo">Cancelar trajeto</button>
+  </section>
+
+  <!-- ===================== ÁLBUM ===================== -->
+  <section id="screen-album" class="screen">
+    <div class="pilula">Álbum de figurinhas do campus-sede</div>
+    <div id="album-grid" class="album-grid"></div>
+  </section>
+
+  <!-- ===================== SCANNER ===================== -->
+  <section id="screen-scanner" class="screen">
+    <div class="scanner-viewfinder">
+      <video id="scanner-video" autoplay playsinline muted></video>
+      <canvas id="scanner-canvas" hidden></canvas>
+    </div>
+    <button id="btn-escanear">Escanear obra de arte</button>
+    <p id="scanner-resultado"></p>
+  </section>
+
+  <nav class="tab-bar">
+    <button class="tab-btn active" data-screen="mapa">Mapa</button>
+    <button class="tab-btn" data-screen="rota">Rota</button>
+    <button class="tab-btn" data-screen="album">Álbum</button>
+    <button class="tab-btn" data-screen="scanner">Scanner</button>
+  </nav>
+
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>
