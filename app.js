@@ -30,6 +30,10 @@ const RAIO_CHEGADA = 10;         // metros para considerar que chegou num ponto
 const RAIO_ALERTA = 22;
 const LIMITE_ANCORAGEM_GPS = 35;
 const INTERVALO_ORIENTACAO = 10000;
+const JANELA_GIRO = 15;          // metros olhados antes e depois de cada ponto para medir um giro
+const ANGULO_MINIMO_GIRO = 35;   // graus: abaixo disso o trecho é tratado como "seguir em frente"
+const JANELA_MINIMA_GIRO = 8;    // metros: perto do início/fim da rota não há trecho suficiente para medir um giro
+const ANGULO_MINIMO_GIRO_NAS_PONTAS = 50;   // graus: com a janela encurtada (início/fim) a medida é mais ruidosa
 const TIPOS_CAMINHO = {
   escadaria: { alerta: "Atenção: escadaria à frente." },
   rampa: { alerta: "Atenção: rampa à frente." },
@@ -222,23 +226,78 @@ function instrucaoDeGiro(giro) {
   return giro === "em meia-volta" ? "faça meia-volta" : `vire ${giro}`;
 }
 
+// Ponto que fica a `metros` do ponto k, andando pela própria rota (sentido -1 = para trás, +1 = para frente).
+function pontoAoLongoDaRota(pts, k, metros, sentido) {
+  let resta = metros, i = k;
+  while (i + sentido >= 0 && i + sentido < pts.length) {
+    const a = pts[i], b = pts[i + sentido], trecho = dist(a, b);
+    if (trecho >= resta && trecho > 0) {
+      const t = resta / trecho;
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    }
+    resta -= trecho;
+    i += sentido;
+  }
+  return pts[i];
+}
+
+// Ângulo (com sinal) entre o que o usuário andou e o que vai andar, medido em uma janela
+// de JANELA_GIRO metros. Assim o zigue-zague de trechos muito curtos do traçado não vira "vire".
+function anguloDeGiro(pts, k, antesDisponivel, depoisDisponivel) {
+  const janela = Math.min(JANELA_GIRO, antesDisponivel, depoisDisponivel);   // mesma janela dos dois lados
+  if (janela < JANELA_MINIMA_GIRO) return 0;
+  const antes = pontoAoLongoDaRota(pts, k, janela, -1);
+  const depois = pontoAoLongoDaRota(pts, k, janela, 1);
+  const a = { x: pts[k].x - antes.x, y: pts[k].y - antes.y };
+  const b = { x: depois.x - pts[k].x, y: depois.y - pts[k].y };
+  const angulo = Math.atan2(a.x * b.y - a.y * b.x, a.x * b.x + a.y * b.y) * 180 / Math.PI;
+  const minimo = janela < JANELA_GIRO ? ANGULO_MINIMO_GIRO_NAS_PONTAS : ANGULO_MINIMO_GIRO;
+  return Math.abs(angulo) >= minimo ? angulo : 0;
+}
+
+// Giros reais da rota: pontos onde o ângulo da janela é o maior da vizinhança e passa do mínimo.
+function girosDaRota(pts) {
+  const giros = new Map();
+  if (pts.length < 3) return giros;
+  const acumulado = [0];
+  for (let i = 1; i < pts.length; i++) acumulado[i] = acumulado[i - 1] + dist(pts[i - 1], pts[i]);
+  const total = acumulado[pts.length - 1];
+  const angulos = pts.map((_, k) => (k === 0 || k === pts.length - 1) ? 0 : anguloDeGiro(pts, k, acumulado[k], total - acumulado[k]));
+  for (let k = 1; k < pts.length - 1; k++) {
+    const modulo = Math.abs(angulos[k]);
+    if (modulo < ANGULO_MINIMO_GIRO) continue;
+    let maior = true;
+    for (let j = 1; j < pts.length - 1 && maior; j++) {
+      if (j === k || Math.abs(acumulado[j] - acumulado[k]) > JANELA_GIRO) continue;
+      const outro = Math.abs(angulos[j]);
+      if (j < k ? outro >= modulo : outro > modulo) maior = false;
+    }
+    if (!maior) continue;
+    giros.set(k, modulo > 150 ? "em meia-volta" : angulos[k] > 0 ? "à direita" : "à esquerda");
+  }
+  return giros;
+}
+
+function giroDoPonto(ponto, anterior, seguinte) {
+  if (ponto && ponto.giro !== undefined) return ponto.giro;
+  return seguinte ? orientarGiro(anterior, ponto, seguinte) : "";
+}
+
 function pontosDeOrientacao(pts) {
   if (pts.length < 3) return pts.map((p, i) => ({ ...p, indice: i }));
-  const indices = new Set([0, pts.length - 1]);
+  const giros = girosDaRota(pts);
+  const indices = new Set([0, pts.length - 1, ...giros.keys()]);
   for (let i = 1; i < pts.length - 1; i++) {
-    const giro = orientarGiro(pts[i - 1], pts[i], pts[i + 1]);
-    if (giro || pts[i + 1].tipoAresta && TIPOS_CAMINHO[pts[i + 1].tipoAresta]?.alerta) {
-      indices.add(i);
-    }
+    if (pts[i + 1].tipoAresta && TIPOS_CAMINHO[pts[i + 1].tipoAresta]?.alerta) indices.add(i);
   }
-  return [...indices].sort((a, b) => a - b).map(i => ({ ...pts[i], indice: i }));
+  return [...indices].sort((a, b) => a - b).map(i => ({ ...pts[i], indice: i, giro: giros.get(i) || "" }));
 }
 
 function textoOrientacao(navAtual, distancia) {
   const destino = navAtual.pts[navAtual.idx];
   const anterior = navAtual.pts[navAtual.idx - 1];
   const seguinte = navAtual.pts[navAtual.idx + 1];
-  const giro = seguinte ? orientarGiro(anterior, destino, seguinte) : "";
+  const giro = seguinte ? giroDoPonto(destino, anterior, seguinte) : "";
   const giroAtual = navAtual.ultimoTurno && dist(posUsuario, navAtual.ultimoTurno.ponto) <= RAIO_ALERTA
     ? `${instrucaoDeGiro(navAtual.ultimoTurno.direcao)}. `
     : "";
@@ -649,7 +708,7 @@ function atualizarNavegacao() {
     const ponto = nav.pts[nav.idx];
     const anterior = nav.pts[nav.idx - 1];
     const seguinte = nav.pts[nav.idx + 1];
-    const giro = seguinte && orientarGiro(anterior, ponto, seguinte);
+    const giro = seguinte && giroDoPonto(ponto, anterior, seguinte);
     if (giro) nav.ultimoTurno = { ponto, direcao: giro };
     nav.idx++;
     nav.ultimaInstrucao = "";
