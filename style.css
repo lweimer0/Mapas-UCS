@@ -160,17 +160,69 @@ button {
         font: 400 .78rem var(--fonte-titulo);
     }
 
+.route-preference {
+    margin: 10px 14px 0;
+    color: var(--tinta);
+    font-size: .78rem;
+}
+
+.route-preference label {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.route-preference input {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    margin: 0;
+    accent-color: var(--azul);
+}
+
+.route-preference p {
+    margin: 4px 0 0 29px;
+    color: var(--cinza);
+    font-size: .7rem;
+    line-height: 1.35;
+}
+
 .viewport {
     position: relative;
     flex: 1;
     min-height: 240px;
-    margin: 44px 38px 22px;
+    margin: 8px 38px 22px;
     overflow: hidden;
     border-radius: 14px;
     background: #d9d6cf;
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
+}
+
+.map-controls {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin: 10px 38px 0;
+}
+
+.map-controls button {
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.35);
+    color: var(--tinta);
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+#pins {
+    display: block !important;
 }
 
 .world {
@@ -181,11 +233,11 @@ button {
     will-change: transform;
 }
 
-    .world img {
-        display: block;
-        max-width: none;
-        pointer-events: none;
-    }
+.world img {
+    display: block;
+    max-width: none;
+    pointer-events: none;
+}
 
 .overlay {
     position: absolute;
@@ -195,6 +247,11 @@ button {
     height: 100%;
     pointer-events: none;
     overflow: visible;
+}
+
+.bottom-sheet{
+  margin:-6px 38px 16px;background:#fff;border-radius:14px;padding:12px 14px;
+  box-shadow:0 -2px 10px rgba(0,0,0,.1);
 }
 
 #pins {
@@ -244,7 +301,7 @@ button {
         font-weight: 700;
         color: #fff;
         text-shadow: 0 0 3px #000,0 0 3px #000,0 0 3px #000;
-        display: none;
+        display: block;
     }
 
     .world.perto .pin .rot, .pin.sel .rot {
@@ -266,69 +323,6 @@ button {
     transform: translate(-50%,-50%) scale(var(--inv,1));
     z-index: 6;
 }
-
-.map-controls {
-    position: absolute;
-    right: 8px;
-    top: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-    .map-controls button {
-        width: 36px;
-        height: 36px;
-        border-radius: 10px;
-        border: none;
-        background: #fff;
-        box-shadow: 0 1px 4px rgba(0,0,0,.35);
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: var(--tinta);
-    }
-
-        .map-controls button.ativo {
-            background: var(--ouro);
-        }
-
-.editor-panel {
-    margin: -8px 8px 12px;
-    background: #fff;
-    border-radius: 14px;
-    padding: 10px;
-    border: 1px solid var(--ouro);
-}
-
-.editor-help {
-    margin: 0 0 8px;
-    font-size: .76rem;
-    line-height: 1.35;
-}
-
-.editor-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
-    .editor-buttons select {
-        padding: 7px 8px;
-        border: 1px solid var(--cinza);
-        border-radius: 999px;
-        background: #fff;
-        font-size: .76rem;
-        font-weight: 600;
-    }
-
-    .editor-buttons button {
-        padding: 7px 10px;
-        border: 1px solid var(--cinza);
-        border-radius: 999px;
-        background: var(--fundo);
-        font-size: .76rem;
-        font-weight: 600;
-    }
 
 .bottom-sheet {
     margin: -6px 38px 16px;
@@ -371,19 +365,35 @@ button {
         }
 
 /* --- Rota --- */
-.nav-instrucao {
-    margin: 60px 38px 0;
-    min-height: 215px;
-    border-radius: 14px;
-    background: var(--tinta);
-    color: #fff;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 18px 14px;
+.nav-instrucao{
+  margin:60px 38px 0;min-height:215px;border-radius:14px;background:var(--tinta);color:#fff;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:18px 14px;
 }
+.nav-seta{font-size:3.4rem;line-height:1;display:inline-block;transition:transform .25s;}
+#nav-distancia{font-size:1.6rem;font-weight:700;margin:6px 0 2px;}
+#nav-texto{margin:0;font-size:.95rem;}
+.nav-restante{margin:8px 0 0;font-size:.75rem;opacity:.75;}
+.nav-alerta{margin:10px 0 0;color:#ffe08a;font-size:.85rem;font-weight:700;}
+
+.voice-toggle{
+  margin:25px 38px 0;display:flex;align-items:center;gap:14px;
+  font-size:1rem;cursor:pointer;
+}
+.voice-toggle input{
+  appearance:none;-webkit-appearance:none;width:30px;height:30px;flex:none;margin:0;
+  border:2px solid var(--azul);border-radius:7px;background:#fff;cursor:pointer;position:relative;
+}
+.voice-toggle input:checked{background:var(--azul);}
+.voice-toggle input:checked::after{
+  content:"";position:absolute;left:9px;top:3px;width:7px;height:14px;
+  border:solid #fff;border-width:0 3px 3px 0;transform:rotate(45deg);
+}
+.voice-setting{margin:18px 38px 5px;font-size:.8rem;font-weight:700;}
+.voice-select{margin:0 38px;padding:10px;border:1px solid var(--azul);border-radius:10px;background:#fff;color:var(--tinta);font:600 .8rem var(--fonte-texto);}
+.voice-hint{margin:5px 38px 0;color:var(--cinza);font-size:.7rem;line-height:1.35;}
+.voice-rate{margin:3px 38px 0;width:calc(100% - 76px);accent-color:var(--azul);}
+.voice-setting + .voice-rate{margin-top:0;}
 
 .nav-seta {
     font-size: 3.4rem;
