@@ -14,9 +14,6 @@ const FIREBASE_CONFIG = {
   appId: "1:58460944522:web:43a49bfa22486bd04c5573"
 };
 
-// Link do modelo treinado no Teachable Machine (termina com "/")
-const TEACHABLE_MACHINE_MODEL_URL = "COLOQUE_AQUI_O_LINK_DO_MODELO/"; // <- COLOQUE AQUI
-
 // Obras de arte do campus. "label" = nome EXATO da classe no Teachable Machine.
 // "imagem" = foto da obra (coloque em /obras/ no repositório). Sem foto, aparece "?".
 const TOTAL_FIGURINHAS = 28;   // círculos do álbum (4 colunas x 7 linhas)
@@ -70,7 +67,7 @@ let vozesDisponiveis = [];
 let idVozSelecionada = "feminina";
 let avisoFallbackVoz = "";
 
-let db = null, tmModel = null;
+let db = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -861,9 +858,12 @@ function renderizarAlbum(des) {
 /* ---------- 12) SCANNER (Teachable Machine) ---------- */
 
 async function carregarModelo() {
-  if (TEACHABLE_MACHINE_MODEL_URL.includes("COLOQUE_AQUI")) return;
-  try { tmModel = await tmImage.load(TEACHABLE_MACHINE_MODEL_URL + "model.json", TEACHABLE_MACHINE_MODEL_URL + "metadata.json"); }
-  catch (e) { console.warn("Modelo TM:", e); }
+  if (!window.teachableMachine || !window.teachableMachine.isConfigured()) return;
+  try {
+    await window.teachableMachine.init();
+  } catch (e) {
+    console.warn("Modelo TM:", e);
+  }
 }
 
 async function iniciarCamera() {
@@ -878,10 +878,20 @@ function pararCamera() {
 
 $("btn-escanear").addEventListener("click", async () => {
   const out = $("scanner-resultado");
-  if (!tmModel) { out.textContent = "O modelo de reconhecimento ainda não foi configurado."; return; }
+  if (!window.teachableMachine || !window.teachableMachine.isConfigured()) {
+    out.textContent = "O modelo de reconhecimento ainda não foi configurado.";
+    return;
+  }
   const v = $("scanner-video"), c = $("scanner-canvas");
   c.width = v.videoWidth; c.height = v.videoHeight; c.getContext("2d").drawImage(v, 0, 0);
-  const pred = await tmModel.predict(c);
+  let pred;
+  try {
+    pred = await window.teachableMachine.predict(c);
+  } catch (e) {
+    console.warn("Reconhecimento TM:", e);
+    out.textContent = "Não foi possível carregar ou executar o modelo treinado.";
+    return;
+  }
   const melhor = pred.reduce((a, b) => a.probability > b.probability ? a : b);
   const obra = melhor.probability > 0.8 && OBRAS_DE_ARTE.find(o => o.label === melhor.className);
   if (obra) {

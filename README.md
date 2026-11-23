@@ -1,6 +1,12 @@
 # Mapas-UCS
 Trabalho da disciplina de Ciência Tecnologia Inovação e Sociedade da Universidade de Caxias do Sul
 
+## Modelo Teachable Machine
+
+Depois de treinar o modelo no Teachable Machine, exporte-o no formato **TensorFlow.js** e abra o arquivo `tensorflow.js`. Cole o link público fornecido pela plataforma na constante `TEACHABLE_MACHINE_MODEL_URL`.
+
+O link deve terminar em `/` e os arquivos `model.json` e `metadata.json` devem continuar acessíveis nessa URL. Os arquivos TensorFlow.js já carregados pelo projeto ficam em `index.html`; o scanner em `app.js` usa automaticamente o modelo configurado em `tensorflow.js`.
+
 ## Mapa e orientação acessível
 
 O mapa ilustrado (`mapa-campus.jpg`) permanece como base visual de referência; o grafo de `caminhos.json` é usado internamente para calcular rotas e alertas. O site público não oferece editor nem desenha a rede inteira: somente a rota escolhida aparece sobre o mapa. A rede inclui categorias como externo, interno, travessia, atenção, acesso e ligação. Os trechos roxos confirmados na imagem anotada recebem a tag `alternativo` sem substituir sua categoria original. O roteamento traça somente nós e trechos mapeados: cada local precisa de uma âncora no grafo. A constante `LIMITE_ANCORAGEM_GPS` (35 m) existe no código, mas ainda não é aplicada durante a navegação: a posição do GPS não é comparada com o trajeto mapeado. O app não desenha ligações retas artificiais para dentro ou fora da rede. O grafo ainda não classifica todos os trechos como escadaria ou rampa, portanto esses alertas dependem de dados corretos nessas categorias. **A remoção do editor e da camada completa é uma mudança da interface, não controle de acesso:** como o site é estático, o arquivo `caminhos.json` continua sendo baixado pelo navegador para que o roteamento funcione.
